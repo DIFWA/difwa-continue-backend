@@ -18,7 +18,7 @@ export const getCategories = async (req, res) => {
 
         const totalCategories = await Category.countDocuments(query);
         const categories = await Category.find(query)
-            .sort({ order: 1, name: 1 })
+            .sort({ name: 1 })
             .skip(skip)
             .limit(parseInt(limit));
 
@@ -40,10 +40,10 @@ export const getCategories = async (req, res) => {
 // Create a new category
 export const createCategory = async (req, res) => {
     try {
-        const { name, image, order, isVisible } = req.body;
+        const { name } = req.body;
         if (!name) return res.status(400).json({ success: false, message: "Name is required" });
 
-        const category = await Category.create({ name, image, order, isVisible });
+        const category = await Category.create({ name });
         res.status(201).json({ success: true, data: category });
     } catch (error) {
         if (error.code === 11000) {
@@ -57,9 +57,9 @@ export const createCategory = async (req, res) => {
 export const updateCategory = async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, image, order, isVisible } = req.body;
+        const { name } = req.body;
 
-        const category = await Category.findByIdAndUpdate(id, { name, image, order, isVisible }, { new: true, runValidators: true });
+        const category = await Category.findByIdAndUpdate(id, { name }, { new: true, runValidators: true });
         if (!category) return res.status(404).json({ success: false, message: "Category not found" });
 
         res.status(200).json({ success: true, data: category });

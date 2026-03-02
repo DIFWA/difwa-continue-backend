@@ -1,29 +1,6 @@
-import AppUser from "../models/AppUser.js";
-import Category from "../models/Category.js";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-
-// Get categories for mobile app (minimal structure)
-export const getAppCategories = async (req, res) => {
-    try {
-        const categories = await Category.find({ isVisible: true })
-            .select("name image")
-            .sort({ order: 1 });
-
-        const minimalCategories = categories.map(cat => ({
-            id: cat._id,
-            name: cat.name,
-            image: cat.image || ""
-        }));
-
-        res.status(200).json({
-            success: true,
-            categories: minimalCategories
-        });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-};
+import AppUser from "../models/AppUser.js";
 
 // Register
 export const registerUser = async (req, res) => {
