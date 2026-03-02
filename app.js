@@ -5,6 +5,7 @@ import authRoutes from "./routes/authRoutes.js"
 import adminRoutes from "./routes/adminRoutes.js"
 import uploadRoutes from "./routes/uploadRoutes.js"
 import appAuthRoutes from "./routes/appAuthRoutes.js";
+import retailerRoutes from "./routes/retailerRoutes.js";
 
 const app = express()
 
@@ -21,6 +22,7 @@ app.use("/uploads", express.static(path.join(process.cwd(), "uploads")))
 app.use("/api/auth", authRoutes)
 app.use("/api/admin", adminRoutes)
 app.use("/api/upload", uploadRoutes)
+app.use("/api/retailer", retailerRoutes)
 
 //app routes
 
