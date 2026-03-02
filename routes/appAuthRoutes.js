@@ -12,7 +12,6 @@ import {
     forgotPassword,
     addAddress,
     getAddresses,
-    getAddresses,
     deleteAddress,
     getAppCategories
 } from "../controllers/appAuthController.js";
