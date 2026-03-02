@@ -37,14 +37,14 @@ export const registerUser = async (req, res) => {
 
         return res.status(201).json({
             success: true,
-            message: "User registered successfully",
-            token,
+            message: "User registered successfully. Please verify your phone number to login.",
             data: {
                 id: newUser._id,
                 fullName: newUser.fullName,
                 email: newUser.email,
                 username: newUser.username,
                 phoneNumber: newUser.phoneNumber,
+                isVerified: newUser.isVerified
             },
         });
     } catch (error) {
@@ -72,6 +72,14 @@ export const loginUser = async (req, res) => {
 
         if (!isMatch) {
             return res.status(400).json({ success: false, message: "Invalid credentials" });
+        }
+
+        if (!user.isVerified) {
+            return res.status(403).json({
+                success: false,
+                message: "Account not verified. Please verify your phone number.",
+                phoneNumber: user.phoneNumber
+            });
         }
 
         const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "7d" });

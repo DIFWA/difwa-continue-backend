@@ -36,6 +36,10 @@ const appUserSchema = new mongoose.Schema(
                 isDefault: { type: Boolean, default: false }
             }
         ],
+        isVerified: {
+            type: Boolean,
+            default: false,
+        },
     },
     { timestamps: true }
 );
