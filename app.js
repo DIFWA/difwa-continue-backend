@@ -11,7 +11,7 @@ const app = express()
 
 // Connect Database
 import connectDB from "./config/db.js"
-connectDB()
+await connectDB()
 
 // Middleware
 app.use(cors())
