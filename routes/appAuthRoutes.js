@@ -20,8 +20,8 @@ import { getPublicSubscriptionPlans } from "../controllers/subscriptionControlle
 // Categories (Public for App)
 router.get("/categories", getPublicCategories);
 
-// Subscription Plans (Public for App)
-router.get("/subscriptions", getPublicSubscriptionPlans);
+// Subscription Plans (Public for App - Protected)
+router.get("/subscriptions", protectAppUser, getPublicSubscriptionPlans);
 
 //register
 
