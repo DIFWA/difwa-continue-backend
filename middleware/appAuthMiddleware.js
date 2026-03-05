@@ -20,6 +20,7 @@ const protectAppUser = async (req, res, next) => {
         }
 
         req.user = user;
+        req.userId = decoded.id;
         next();
     } catch (error) {
         return res.status(401).json({ message: "Token invalid" });

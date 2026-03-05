@@ -1,6 +1,8 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import otpGenerator from "otp-generator";
 import AppUser from "../models/AppUser.js";
+import Otp from "../models/Otp.js";
 
 // Register
 export const registerUser = async (req, res) => {
@@ -33,11 +35,29 @@ export const registerUser = async (req, res) => {
             password: hashedPassword,
         });
 
-        const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
+        // Generate 6 digit OTP
+        const otpCode = otpGenerator.generate(6, {
+            upperCaseAlphabets: false,
+            specialChars: false,
+            lowerCaseAlphabets: false
+        });
+
+        // Expiry 5 minutes
+        const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+        // Save OTP in DB
+        await Otp.findOneAndUpdate(
+            { phoneNumber },
+            { otp: otpCode, expiresAt },
+            { upsert: true, new: true }
+        );
+
+        console.log(`[REGISTRATION OTP] for ${phoneNumber}: ${otpCode}`);
 
         return res.status(201).json({
             success: true,
             message: "User registered successfully. Please verify your phone number to login.",
+            dummyOtp: otpCode, // For development convenience
             data: {
                 id: newUser._id,
                 fullName: newUser.fullName,
@@ -102,10 +122,9 @@ export const loginUser = async (req, res) => {
     }
 };
 
-// Get profile (expects protect middleware to set req.user)
 export const getProfile = async (req, res) => {
     try {
-        return res.status(200).json({ success: true, data: req.user });
+        return res.status(200).json({ success: true, data: req.user, message: "Profile fetched successfully" });
     } catch (error) {
         console.error("getProfile error:", error);
         return res.status(500).json({ success: false, message: "Server error" });
