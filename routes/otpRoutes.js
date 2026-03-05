@@ -33,7 +33,7 @@ router.post("/send", async (req, res) => {
         return res.status(200).json({
             success: true,
             message: "OTP sent successfully (Dummy)",
-            dummyOtp: otpCode // In real app, don't return this!
+            otp: otpCode // In real app, don't return this!
         });
     } catch (error) {
         console.error("otp send error:", error);

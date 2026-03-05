@@ -7,7 +7,7 @@ import Otp from "../models/Otp.js";
 // Register
 export const registerUser = async (req, res) => {
     try {
-        const { fullName, username, email, phoneNumber, password, confirmPassword } = req.body;
+        const { fullName, email, phoneNumber, password, confirmPassword } = req.body;
 
         if (!fullName || !phoneNumber || !password || !confirmPassword) {
             return res.status(400).json({ success: false, message: "All required fields must be filled" });
@@ -56,7 +56,7 @@ export const registerUser = async (req, res) => {
         return res.status(201).json({
             success: true,
             message: "User registered successfully. Please verify your phone number to login.",
-            dummyOtp: otpCode, // For development convenience
+            otp: otpCode, // For development convenience
             data: {
                 id: newUser._id,
                 fullName: newUser.fullName,
