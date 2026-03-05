@@ -18,18 +18,17 @@ export const registerUser = async (req, res) => {
         }
 
         const existingUser = await AppUser.findOne({
-            $or: [{ email }, { username }, { phoneNumber }],
+            $or: [{ email }, { phoneNumber }],
         });
 
         if (existingUser) {
-            return res.status(400).json({ success: false, message: "User already exists" });
+            return res.status(400).json({ success: false, message: "User with this email or phone number already exists" });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const newUser = await AppUser.create({
             fullName,
-            username,
             email,
             phoneNumber,
             password: hashedPassword,
@@ -62,7 +61,6 @@ export const registerUser = async (req, res) => {
                 id: newUser._id,
                 fullName: newUser.fullName,
                 email: newUser.email,
-                username: newUser.username,
                 phoneNumber: newUser.phoneNumber,
                 isVerified: newUser.isVerified
             },
@@ -76,13 +74,13 @@ export const registerUser = async (req, res) => {
 // Login
 export const loginUser = async (req, res) => {
     try {
-        const { identifier, password } = req.body; // identifier = email OR username
+        const { phoneNumber, password } = req.body;
 
-        if (!identifier || !password) {
-            return res.status(400).json({ success: false, message: "All fields required" });
+        if (!phoneNumber || !password) {
+            return res.status(400).json({ success: false, message: "Phone number and password required" });
         }
 
-        const user = await AppUser.findOne({ $or: [{ email: identifier }, { username: identifier }] });
+        const user = await AppUser.findOne({ phoneNumber });
 
         if (!user) {
             return res.status(400).json({ success: false, message: "Invalid credentials" });
@@ -112,7 +110,6 @@ export const loginUser = async (req, res) => {
                 id: user._id,
                 fullName: user.fullName,
                 email: user.email,
-                username: user.username,
                 phoneNumber: user.phoneNumber,
             },
         });
@@ -134,9 +131,9 @@ export const getProfile = async (req, res) => {
 // Update profile
 export const updateProfile = async (req, res) => {
     try {
-        const { fullName, username, email, phoneNumber } = req.body;
+        const { fullName, email, phoneNumber } = req.body;
 
-        if (!fullName && !username && !email && !phoneNumber) {
+        if (!fullName && !email && !phoneNumber) {
             return res.status(400).json({ success: false, message: "At least one field is required to update" });
         }
 
@@ -163,17 +160,6 @@ export const updateProfile = async (req, res) => {
             if (emailExists) return res.status(400).json({ success: false, message: "Email already in use" });
             user.email = email;
             updates.push("email");
-        }
-
-        // username
-        if (username) {
-            if (username === user.username) {
-                return res.status(400).json({ success: false, message: "Username is same as previous" });
-            }
-            const usernameExists = await AppUser.findOne({ username });
-            if (usernameExists) return res.status(400).json({ success: false, message: "Username already in use" });
-            user.username = username;
-            updates.push("username");
         }
 
         // phone
