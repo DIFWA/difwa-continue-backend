@@ -4,6 +4,7 @@ import protectAppUser from "../middleware/appAuthMiddleware.js";
 import { protect, retailerOnly } from "../middleware/authMiddleware.js";
 import {
     getRetailerProducts,
+    getProductById,
     createProduct,
     updateProduct,
     deleteProduct
@@ -23,6 +24,7 @@ router.get("/categories", async (req, res) => {
 
 // Product Management
 router.get("/products", protect, retailerOnly, getRetailerProducts);
+router.get("/products/:id", protect, retailerOnly, getProductById);
 router.post("/products", protect, retailerOnly, createProduct);
 router.put("/products/:id", protect, retailerOnly, updateProduct);
 router.delete("/products/:id", protect, retailerOnly, deleteProduct);

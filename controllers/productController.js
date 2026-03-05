@@ -12,6 +12,20 @@ export const getRetailerProducts = async (req, res) => {
     }
 };
 
+// Get a single product by ID
+export const getProductById = async (req, res) => {
+    try {
+        const product = await Product.findOne({ _id: req.params.id, retailer: req.user._id })
+            .populate("category", "name");
+        if (!product) {
+            return res.status(404).json({ success: false, message: "Product not found" });
+        }
+        res.status(200).json({ success: true, data: product });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // Create a new product
 export const createProduct = async (req, res) => {
     try {
