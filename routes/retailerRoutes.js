@@ -1,5 +1,11 @@
-import express from "express";
-import Category from "../models/Category.js";
+import protectAppUser from "../middleware/appAuthMiddleware.js";
+import { protect, retailerOnly } from "../middleware/authMiddleware.js";
+import {
+    getRetailerProducts,
+    createProduct,
+    updateProduct,
+    deleteProduct
+} from "../controllers/productController.js";
 
 const router = express.Router();
 
@@ -12,5 +18,11 @@ router.get("/categories", async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 });
+
+// Product Management
+router.get("/products", protect, retailerOnly, getRetailerProducts);
+router.post("/products", protect, retailerOnly, createProduct);
+router.put("/products/:id", protect, retailerOnly, updateProduct);
+router.delete("/products/:id", protect, retailerOnly, deleteProduct);
 
 export default router;
