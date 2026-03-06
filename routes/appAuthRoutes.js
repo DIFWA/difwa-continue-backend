@@ -31,7 +31,6 @@ router.get("/shops/:shopId/products", getShopProducts);
 router.get("/subscriptions", protectAppUser, getPublicSubscriptionPlans);
 
 //register
-
 router.post("/register", registerUser);
 
 //login
@@ -57,5 +56,10 @@ router.get("/address", protectAppUser, getAddresses);
 
 //delete address
 router.delete("/address/:id", protectAppUser, deleteAddress);
+
+// --- Cart ---
+router.get("/cart", protectAppUser, getCart);
+router.post("/cart/item", protectAppUser, addToCart);
+router.delete("/cart", protectAppUser, clearCart);
 
 export default router;
