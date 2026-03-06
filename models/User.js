@@ -61,7 +61,8 @@ const userSchema = new mongoose.Schema({
             fssai: String,
             licenseUrl: String,
             gstCertificateUrl: String
-        }
+        },
+        storeImage: String // Banner or profile photo for the shop
     }
 }, { timestamps: true })
 

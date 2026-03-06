@@ -9,6 +9,7 @@ import {
     updateProduct,
     deleteProduct
 } from "../controllers/productController.js";
+import { updateRetailerProfile } from "../controllers/authController.js";
 
 const router = express.Router();
 
@@ -28,5 +29,8 @@ router.get("/products/:id", protect, retailerOnly, getProductById);
 router.post("/products", protect, retailerOnly, createProduct);
 router.put("/products/:id", protect, retailerOnly, updateProduct);
 router.delete("/products/:id", protect, retailerOnly, deleteProduct);
+
+// Shop Profile Management
+router.put("/profile", protect, retailerOnly, updateRetailerProfile);
 
 export default router;
