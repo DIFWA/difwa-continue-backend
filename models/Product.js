@@ -41,7 +41,8 @@ const ProductSchema = new mongoose.Schema({
     },
     sku: {
         type: String,
-        unique: true
+        unique: true,
+        sparse: true
     },
     retailer: {
         type: mongoose.Schema.Types.ObjectId,
