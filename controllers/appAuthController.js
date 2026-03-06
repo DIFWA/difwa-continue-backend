@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 import otpGenerator from "otp-generator";
 import AppUser from "../models/AppUser.js";
 import Otp from "../models/Otp.js";
-
+import { sendWelcomeEmail } from "../services/emailService.js";
 // Register
 export const registerUser = async (req, res) => {
     try {
@@ -33,6 +33,13 @@ export const registerUser = async (req, res) => {
             phoneNumber,
             password: hashedPassword,
         });
+
+        // send welcome email (non-blocking)
+        try {
+            await sendWelcomeEmail(newUser.email, newUser.fullName);
+        } catch (error) {
+            console.log("Welcome email failed:", error.message);
+        }
 
         // Generate 6 digit OTP
         const otpCode = otpGenerator.generate(6, {
@@ -174,6 +181,13 @@ export const updateProfile = async (req, res) => {
         }
 
         await user.save();
+
+        // send welcome email (non-blocking)
+        try {
+            await sendWelcomeEmail(user.email, user.fullName);
+        } catch (error) {
+            console.log("Welcome email failed:", error.message);
+        }
 
         return res.status(200).json({ success: true, message: "Profile updated successfully", updatedFields: updates, data: user });
     } catch (error) {
