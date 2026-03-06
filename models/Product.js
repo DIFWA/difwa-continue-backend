@@ -14,14 +14,14 @@ const ProductSchema = new mongoose.Schema({
         type: Number,
         required: true
     },
-    silverPrice: {
-        type: Number,
-        default: 0
-    },
-    goldPrice: {
-        type: Number,
-        default: 0
-    },
+    // silverPrice: {
+    //     type: Number,
+    //     default: 0
+    // },
+    // goldPrice: {
+    //     type: Number,
+    //     default: 0
+    // },
     category: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Category",
@@ -39,11 +39,11 @@ const ProductSchema = new mongoose.Schema({
         enum: ["In Stock", "Out of Stock", "Low Stock"],
         default: "In Stock"
     },
-    sku: {
-        type: String,
-        unique: true,
-        sparse: true
-    },
+    // sku: {
+    //     type: String,
+    //     unique: true,
+    //     sparse: true
+    // },
     retailer: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User", // Assuming User model is used for Retailers too, or I should check Retailer model if any
