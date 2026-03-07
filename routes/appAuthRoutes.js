@@ -14,9 +14,23 @@ import {
     getAddresses,
     deleteAddress
 } from "../controllers/appAuthController.js";
+import { getPublicCategories } from "../controllers/adminController.js";
+import { getPublicSubscriptionPlans } from "../controllers/subscriptionController.js";
+import { getPublicShops, getShopDetails, getShopProducts } from "../controllers/shopController.js";
+import { addToCart, getCart, clearCart } from "../controllers/cartController.js";
+
+// Categories (Public for App)
+router.get("/categories", getPublicCategories);
+
+// Shops (Public for App)
+router.get("/shops", getPublicShops);
+router.get("/shops/:id", getShopDetails);
+router.get("/shops/:shopId/products", getShopProducts);
+
+// Subscription Plans (Public for App - Protected)
+router.get("/subscriptions", protectAppUser, getPublicSubscriptionPlans);
 
 //register
-
 router.post("/register", registerUser);
 
 //login
@@ -42,5 +56,10 @@ router.get("/address", protectAppUser, getAddresses);
 
 //delete address
 router.delete("/address/:id", protectAppUser, deleteAddress);
+
+// --- Cart ---
+router.get("/cart", protectAppUser, getCart);
+router.post("/cart/item", protectAppUser, addToCart);
+router.delete("/cart", protectAppUser, clearCart);
 
 export default router;

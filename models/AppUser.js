@@ -7,11 +7,6 @@ const appUserSchema = new mongoose.Schema(
             required: true,
             trim: true,
         },
-        username: {
-            type: String,
-            unique: true,
-            sparse: true,
-        },
         email: {
             type: String,
             unique: true,
@@ -36,6 +31,10 @@ const appUserSchema = new mongoose.Schema(
                 isDefault: { type: Boolean, default: false }
             }
         ],
+        isVerified: {
+            type: Boolean,
+            default: false,
+        },
     },
     { timestamps: true }
 );

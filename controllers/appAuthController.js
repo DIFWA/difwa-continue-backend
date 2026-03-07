@@ -1,11 +1,13 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import otpGenerator from "otp-generator";
 import AppUser from "../models/AppUser.js";
-
+import Otp from "../models/Otp.js";
+import { sendWelcomeEmail } from "../services/emailService.js";
 // Register
 export const registerUser = async (req, res) => {
     try {
-        const { fullName, username, email, phoneNumber, password, confirmPassword } = req.body;
+        const { fullName, email, phoneNumber, password, confirmPassword } = req.body;
 
         if (!fullName || !phoneNumber || !password || !confirmPassword) {
             return res.status(400).json({ success: false, message: "All required fields must be filled" });
@@ -16,35 +18,58 @@ export const registerUser = async (req, res) => {
         }
 
         const existingUser = await AppUser.findOne({
-            $or: [{ email }, { username }, { phoneNumber }],
+            $or: [{ email }, { phoneNumber }],
         });
 
         if (existingUser) {
-            return res.status(400).json({ success: false, message: "User already exists" });
+            return res.status(400).json({ success: false, message: "User with this email or phone number already exists" });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const newUser = await AppUser.create({
             fullName,
-            username,
             email,
             phoneNumber,
             password: hashedPassword,
         });
 
-        const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
+        // send welcome email (non-blocking)
+        try {
+            await sendWelcomeEmail(newUser.email, newUser.fullName);
+        } catch (error) {
+            console.log("Welcome email failed:", error.message);
+        }
+
+        // Generate 6 digit OTP
+        const otpCode = otpGenerator.generate(6, {
+            upperCaseAlphabets: false,
+            specialChars: false,
+            lowerCaseAlphabets: false
+        });
+
+        // Expiry 5 minutes
+        const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+        // Save OTP in DB
+        await Otp.findOneAndUpdate(
+            { phoneNumber },
+            { otp: otpCode, expiresAt },
+            { upsert: true, new: true }
+        );
+
+        console.log(`[REGISTRATION OTP] for ${phoneNumber}: ${otpCode}`);
 
         return res.status(201).json({
             success: true,
-            message: "User registered successfully",
-            token,
+            message: "User registered successfully. Please verify your phone number to login.",
+            otp: otpCode, // For development convenience
             data: {
                 id: newUser._id,
                 fullName: newUser.fullName,
                 email: newUser.email,
-                username: newUser.username,
                 phoneNumber: newUser.phoneNumber,
+                isVerified: newUser.isVerified
             },
         });
     } catch (error) {
@@ -56,13 +81,13 @@ export const registerUser = async (req, res) => {
 // Login
 export const loginUser = async (req, res) => {
     try {
-        const { identifier, password } = req.body; // identifier = email OR username
+        const { phoneNumber, password } = req.body;
 
-        if (!identifier || !password) {
-            return res.status(400).json({ success: false, message: "All fields required" });
+        if (!phoneNumber || !password) {
+            return res.status(400).json({ success: false, message: "Phone number and password required" });
         }
 
-        const user = await AppUser.findOne({ $or: [{ email: identifier }, { username: identifier }] });
+        const user = await AppUser.findOne({ phoneNumber });
 
         if (!user) {
             return res.status(400).json({ success: false, message: "Invalid credentials" });
@@ -72,6 +97,14 @@ export const loginUser = async (req, res) => {
 
         if (!isMatch) {
             return res.status(400).json({ success: false, message: "Invalid credentials" });
+        }
+
+        if (!user.isVerified) {
+            return res.status(403).json({
+                success: false,
+                message: "Account not verified. Please verify your phone number.",
+                phoneNumber: user.phoneNumber
+            });
         }
 
         const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
@@ -84,7 +117,6 @@ export const loginUser = async (req, res) => {
                 id: user._id,
                 fullName: user.fullName,
                 email: user.email,
-                username: user.username,
                 phoneNumber: user.phoneNumber,
             },
         });
@@ -94,10 +126,9 @@ export const loginUser = async (req, res) => {
     }
 };
 
-// Get profile (expects protect middleware to set req.user)
 export const getProfile = async (req, res) => {
     try {
-        return res.status(200).json({ success: true, data: req.user });
+        return res.status(200).json({ success: true, data: req.user, message: "Profile fetched successfully" });
     } catch (error) {
         console.error("getProfile error:", error);
         return res.status(500).json({ success: false, message: "Server error" });
@@ -107,9 +138,9 @@ export const getProfile = async (req, res) => {
 // Update profile
 export const updateProfile = async (req, res) => {
     try {
-        const { fullName, username, email, phoneNumber } = req.body;
+        const { fullName, email, phoneNumber } = req.body;
 
-        if (!fullName && !username && !email && !phoneNumber) {
+        if (!fullName && !email && !phoneNumber) {
             return res.status(400).json({ success: false, message: "At least one field is required to update" });
         }
 
@@ -138,17 +169,6 @@ export const updateProfile = async (req, res) => {
             updates.push("email");
         }
 
-        // username
-        if (username) {
-            if (username === user.username) {
-                return res.status(400).json({ success: false, message: "Username is same as previous" });
-            }
-            const usernameExists = await AppUser.findOne({ username });
-            if (usernameExists) return res.status(400).json({ success: false, message: "Username already in use" });
-            user.username = username;
-            updates.push("username");
-        }
-
         // phone
         if (phoneNumber) {
             if (phoneNumber === user.phoneNumber) {
@@ -161,6 +181,13 @@ export const updateProfile = async (req, res) => {
         }
 
         await user.save();
+
+        // send welcome email (non-blocking)
+        try {
+            await sendWelcomeEmail(user.email, user.fullName);
+        } catch (error) {
+            console.log("Welcome email failed:", error.message);
+        }
 
         return res.status(200).json({ success: true, message: "Profile updated successfully", updatedFields: updates, data: user });
     } catch (error) {
@@ -227,7 +254,7 @@ export const addAddress = async (req, res) => {
         user.addresses.push(address);
         await user.save();
 
-        return res.status(201).json({ success: true, message: "Address added", addresses: user.addresses });
+        return res.status(201).json({ success: true, message: "Address added", data: user.addresses });
     } catch (error) {
         console.error("addAddress error:", error);
         return res.status(500).json({ success: false, message: "Server error" });
@@ -263,7 +290,7 @@ export const deleteAddress = async (req, res) => {
 
         await user.save();
 
-        return res.status(200).json({ success: true, message: "Address removed", addresses: user.addresses });
+        return res.status(200).json({ success: true, message: "Address removed", data: user.addresses });
     } catch (error) {
         console.error("deleteAddress error:", error);
         return res.status(500).json({ success: false, message: "Server error" });

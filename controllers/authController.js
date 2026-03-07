@@ -135,3 +135,38 @@ export const getCurrentUser = async (req, res) => {
         res.status(500).json({ message: "Something went wrong" })
     }
 }
+
+// Update Retailer Profile (Shop Settings)
+export const updateRetailerProfile = async (req, res) => {
+    try {
+        const { businessDetails, whatsappNumber, alternateContact } = req.body;
+        const user = await User.findById(req.user.id);
+
+        if (!user) return res.status(404).json({ message: "Retailer not found" });
+
+        if (businessDetails) {
+            user.businessDetails = {
+                ...user.businessDetails,
+                ...businessDetails,
+                // Ensure we don't accidentally wipe location or legal if not provided
+                location: {
+                    ...(user.businessDetails?.location || {}),
+                    ...(businessDetails.location || {})
+                },
+                legal: {
+                    ...(user.businessDetails?.legal || {}),
+                    ...(businessDetails.legal || {})
+                }
+            };
+        }
+
+        if (whatsappNumber) user.whatsappNumber = whatsappNumber;
+        if (alternateContact) user.alternateContact = alternateContact;
+
+        await user.save();
+        res.status(200).json({ success: true, message: "Profile updated successfully", data: user });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: error.message || "Something went wrong" });
+    }
+};
