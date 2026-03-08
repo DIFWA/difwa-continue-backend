@@ -1,9 +1,25 @@
-// neeeed to make this after cart is done
-// import Razorpay from "razorpay";
+// Razorpay Service Skeleton
+// In a real environment, you would use 'razorpay' npm package with your API keys.
 
-// const razorpay = new Razorpay({
-//     key_id: process.env.RAZORPAY_KEY_ID,
-//     key_secret: process.env.RAZORPAY_KEY_SECRET
-// });
+export const createRazorpayOrder = async (amount, currency = "INR") => {
+    try {
+        console.log(`Creating Razorpay Order: ${amount} ${currency}`);
 
-// export default razorpay;
+        // Mock response
+        return {
+            id: `order_${Math.random().toString(36).substring(7)}`,
+            amount: amount * 100, // Razorpay works in paise
+            currency,
+            status: "created"
+        };
+    } catch (error) {
+        console.error("Razorpay Order Error:", error);
+        throw error;
+    }
+};
+
+export const verifyRazorpaySignature = (orderId, paymentId, signature) => {
+    // In a real app, use crypto.createHmac to verify the signature
+    console.log(`Verifying Razorpay Signature for Order: ${orderId}`);
+    return true; // Mock verification
+};

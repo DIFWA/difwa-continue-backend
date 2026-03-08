@@ -1,10 +1,9 @@
-import dotenv from "dotenv"
-dotenv.config()
-
+import 'dotenv/config'
 import app from "./app.js"
 import connectDB from "./config/db.js"
+import { initCronJobs } from "./cron.js";
+import { initSocket } from "./services/socketService.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
-
 
 // Connect DB
 await connectDB()
@@ -14,6 +13,10 @@ app.use("/api/payment", paymentRoutes)
 
 // Start Server
 const PORT = process.env.PORT || 5000
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`)
+    initCronJobs();
 })
+
+// Init Socket.io
+initSocket(server);

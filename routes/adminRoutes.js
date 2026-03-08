@@ -6,7 +6,8 @@ import {
     getCategories,
     createCategory,
     updateCategory,
-    deleteCategory
+    deleteCategory,
+    getDashboardStats
 } from "../controllers/adminController.js";
 import {
     getSubscriptionPlans,
@@ -14,8 +15,12 @@ import {
     updateSubscriptionPlan,
     deleteSubscriptionPlan
 } from "../controllers/subscriptionController.js";
+import { protect, adminOnly } from "../middleware/authMiddleware.js";
 
 const router = express.Router()
+
+// Dashboard
+router.get("/dashboard-stats", protect, adminOnly, getDashboardStats)
 
 // Get all retailers (can filter by status)
 router.get("/retailers", getRetailers)

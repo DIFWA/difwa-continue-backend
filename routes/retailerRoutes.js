@@ -10,8 +10,38 @@ import {
     deleteProduct
 } from "../controllers/productController.js";
 import { updateRetailerProfile } from "../controllers/authController.js";
+import { toggleShopStatus, finalizeOrderWeight, getRetailerDashboardStats, getRetailerCustomers, getRetailerRevenueStats, getRetailerOrders, getRetailerReviews, updateOrderItemStatus, assignRiderToOrder } from "../controllers/shopController.js";
+import { getDailyPrepList } from "../services/prepService.js";
 
 const router = express.Router();
+
+// Dashboard Stats
+router.get("/dashboard-stats", protect, retailerOnly, getRetailerDashboardStats);
+
+// Revenue Stats
+router.get("/revenue-stats", protect, retailerOnly, getRetailerRevenueStats);
+
+// Customers
+router.get("/customers", protect, retailerOnly, getRetailerCustomers);
+
+// Orders
+router.get("/orders", protect, retailerOnly, getRetailerOrders);
+router.patch("/order-status", protect, retailerOnly, updateOrderItemStatus);
+router.post("/assign-rider", protect, retailerOnly, assignRiderToOrder);
+
+// Reviews
+router.get("/reviews", protect, retailerOnly, getRetailerReviews);
+
+// Prep List
+router.get("/prep-list", protect, retailerOnly, async (req, res) => {
+    try {
+        const { date } = req.query;
+        const requirements = await getDailyPrepList(req.user.id, date);
+        res.status(200).json({ success: true, data: requirements });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
 
 // Get all categories for retailers
 router.get("/categories", async (req, res) => {
@@ -32,5 +62,7 @@ router.delete("/products/:id", protect, retailerOnly, deleteProduct);
 
 // Shop Profile Management
 router.put("/profile", protect, retailerOnly, updateRetailerProfile);
+router.patch("/toggle-status", protect, retailerOnly, toggleShopStatus);
+router.post("/finalize-weight", protect, retailerOnly, finalizeOrderWeight);
 
 export default router;

@@ -16,9 +16,11 @@ const userSchema = new mongoose.Schema({
     },
     role: {
         type: String,
-        enum: ["admin", "retailer"],
+        enum: ["admin", "retailer", "rider"],
         default: "retailer"
     },
+    walletBalance: { type: Number, default: 0 },
+    isShopActive: { type: Boolean, default: true },
     phone: {
         type: String,
         required: false
