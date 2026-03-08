@@ -3,7 +3,7 @@ import AppUser from "../models/AppUser.js";
 import Category from "../models/Category.js";
 
 // --- CATEGORY CONTROLLERS ---
-
+// sdfsd
 // Get all categories with pagination and search
 export const getCategories = async (req, res) => {
     try {
