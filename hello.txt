@@ -5,3 +5,4 @@ BASE_URL=http://localhost:5000
 CLOUDINARY_API_KEY=588651514843382
 CLOUDINARY_API_SECRET=eNE5A4pD75BhaAGrzFJFEfi4TjM
 CLOUDINARY_CLOUD_NAME=dwemun2dn
+MONGO_URI=mongodb://pritamcodeservir_db_user:test@ac-dkoln49-shard-00-00.cgru8ib.mongodb.net:27017,ac-dkoln49-shard-00-01.cgru8ib.mongodb.net:27017,ac-dkoln49-shard-00-02.cgru8ib.mongodb.net:27017/shrimpbite?ssl=true&replicaSet=atlas-sr6iad-shard-0&authSource=admin&retryWrites=true&w=majority

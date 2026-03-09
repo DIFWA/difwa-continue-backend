@@ -17,7 +17,7 @@ import {
 import { getPublicCategories } from "../controllers/adminController.js";
 import { getPublicSubscriptionPlans } from "../controllers/subscriptionController.js";
 import { getPublicShops, getShopDetails, getShopProducts } from "../controllers/shopController.js";
-import { addToCart, getCart, clearCart } from "../controllers/cartController.js";
+import { addToCart, getCart, clearCart, updateCartItem, removeFromCart } from "../controllers/cartController.js";
 
 // Categories (Public for App)
 router.get("/categories", getPublicCategories);
@@ -50,6 +50,7 @@ router.post("/forgot-password", forgotPassword);
 
 //add address
 router.post("/addaddress", protectAppUser, addAddress);
+router.post("/address", protectAppUser, addAddress); // Alias for Flutter App
 
 //get addresses
 router.get("/address", protectAppUser, getAddresses);
@@ -60,6 +61,10 @@ router.delete("/address/:id", protectAppUser, deleteAddress);
 // --- Cart ---
 router.get("/cart", protectAppUser, getCart);
 router.post("/cart/item", protectAppUser, addToCart);
+router.post("/cart/add", protectAppUser, addToCart);       // Alias
+router.put("/cart/update", protectAppUser, updateCartItem); // New
+router.delete("/cart/remove/:productId", protectAppUser, removeFromCart); // New
+router.delete("/cart/clear", protectAppUser, clearCart);   // Alias
 router.delete("/cart", protectAppUser, clearCart);
 
 export default router;

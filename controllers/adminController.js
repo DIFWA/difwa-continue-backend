@@ -1,10 +1,8 @@
 import User from "../models/User.js";
 import AppUser from "../models/AppUser.js";
 import Category from "../models/Category.js";
-
+import Order from "../models/Order.js";
 // --- CATEGORY CONTROLLERS ---
-// sdfsd
-// Get all categories with pagination and search
 export const getCategories = async (req, res) => {
     try {
         const { page = 1, limit = 10, search = "" } = req.query;
@@ -221,6 +219,77 @@ export const getPublicCategories = async (req, res) => {
         res.status(200).json({
             success: true,
             data: minimalCategories
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// --- DASHBOARD ANALYTICS ---
+export const getDashboardStats = async (req, res) => {
+    try {
+        const totalOrders = await Order.countDocuments();
+
+        // New orders (last 24 hours)
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const newOrders = await Order.countDocuments({ createdAt: { $gte: yesterday } });
+
+        const completedOrders = await Order.countDocuments({ status: "Delivered" });
+        const canceledOrders = await Order.countDocuments({ status: "Cancelled" });
+
+        // Last 7 days chart data
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+        sevenDaysAgo.setHours(0, 0, 0, 0);
+
+        const ordersLast7Days = await Order.aggregate([
+            {
+                $match: {
+                    createdAt: { $gte: sevenDaysAgo }
+                }
+            },
+            {
+                $group: {
+                    _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                    count: { $sum: 1 }
+                }
+            },
+            { $sort: { _id: 1 } }
+        ]);
+
+        // Format chart data
+        const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const chartData = [];
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(sevenDaysAgo);
+            d.setDate(d.getDate() + i);
+            const dateStr = d.toISOString().split("T")[0];
+            const found = ordersLast7Days.find(o => o._id === dateStr);
+            chartData.push({
+                name: days[d.getDay()],
+                orders: found ? found.count : 0
+            });
+        }
+
+        // Recent shop activities (recent retailers)
+        const recentShops = await User.find({ role: "retailer" })
+            .sort({ createdAt: -1 })
+            .select("name email businessDetails createdAt")
+            .limit(5);
+
+        res.status(200).json({
+            success: true,
+            data: {
+                stats: {
+                    totalOrders,
+                    newOrders,
+                    completedOrders,
+                    canceledOrders
+                },
+                chartData,
+                recentShops
+            }
         });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

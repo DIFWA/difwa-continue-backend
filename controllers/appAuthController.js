@@ -87,10 +87,19 @@ export const loginUser = async (req, res) => {
             return res.status(400).json({ success: false, message: "Phone number and password required" });
         }
 
-        const user = await AppUser.findOne({ phoneNumber });
+        let user = await AppUser.findOne({ phoneNumber });
+        let role = "customer";
 
         if (!user) {
-            return res.status(400).json({ success: false, message: "Invalid credentials" });
+            // Check if it's a Rider (from User collection)
+            const User = (await import("../models/User.js")).default;
+            user = await User.findOne({
+                $or: [{ phone: phoneNumber }, { email: phoneNumber }] // Try both for riders
+            });
+            if (!user || user.role !== "rider") {
+                return res.status(400).json({ success: false, message: "Invalid credentials" });
+            }
+            role = "rider";
         }
 
         const isMatch = await bcrypt.compare(password, user.password);
@@ -99,7 +108,7 @@ export const loginUser = async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid credentials" });
         }
 
-        if (!user.isVerified) {
+        if (role === "customer" && !user.isVerified) {
             return res.status(403).json({
                 success: false,
                 message: "Account not verified. Please verify your phone number.",
@@ -107,7 +116,7 @@ export const loginUser = async (req, res) => {
             });
         }
 
-        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
+        const token = jwt.sign({ id: user._id, role }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
         return res.status(200).json({
             success: true,
@@ -115,9 +124,10 @@ export const loginUser = async (req, res) => {
             token,
             data: {
                 id: user._id,
-                fullName: user.fullName,
+                fullName: user.fullName || user.name,
                 email: user.email,
-                phoneNumber: user.phoneNumber,
+                phoneNumber: user.phoneNumber || user.phone,
+                role: role
             },
         });
     } catch (error) {
@@ -128,7 +138,12 @@ export const loginUser = async (req, res) => {
 
 export const getProfile = async (req, res) => {
     try {
-        return res.status(200).json({ success: true, data: req.user, message: "Profile fetched successfully" });
+        // req.user already has the 'role' added by the middleware
+        return res.status(200).json({
+            success: true,
+            data: req.user,
+            message: "Profile fetched successfully"
+        });
     } catch (error) {
         console.error("getProfile error:", error);
         return res.status(500).json({ success: false, message: "Server error" });

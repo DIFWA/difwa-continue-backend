@@ -1,28 +1,22 @@
 // after cart is done
-// import razorpay from "../services/razorpayService.js";
+import { createRazorpayOrder } from "../services/razorpayService.js";
 
-// export const createOrder = async (req, res) => {
-//   try {
+export const createOrder = async (req, res) => {
+    try {
 
-//     const { amount } = req.body;
+        const { amount } = req.body;
 
-//     const options = {
-//       amount: amount * 100, // Razorpay uses paise
-//       currency: "INR",
-//       receipt: "receipt_" + Date.now()
-//     };
+        const order = await createRazorpayOrder(amount);
 
-//     const order = await razorpay.orders.create(options);
+        res.status(200).json({
+            success: true,
+            order
+        });
 
-//     res.status(200).json({
-//       success: true,
-//       order
-//     });
-
-//   } catch (error) {
-//     res.status(500).json({
-//       success: false,
-//       message: error.message
-//     });
-//   }
-// };
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};

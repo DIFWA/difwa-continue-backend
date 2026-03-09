@@ -17,6 +17,15 @@ const appUserSchema = new mongoose.Schema(
             required: true,
             unique: true,
         },
+        referralCode: {
+            type: String,
+            unique: true,
+            sparse: true
+        },
+        referredBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'AppUser'
+        },
         password: {
             type: String,
             required: true,
@@ -35,6 +44,14 @@ const appUserSchema = new mongoose.Schema(
             type: Boolean,
             default: false,
         },
+        walletBalance: {
+            type: Number,
+            default: 0
+        },
+        loyaltyPoints: {
+            type: Number,
+            default: 0
+        }
     },
     { timestamps: true }
 );

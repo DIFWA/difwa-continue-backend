@@ -52,3 +52,11 @@ export const retailerOnly = (req, res, next) => {
         res.status(403).json({ message: "Retailer access required" });
     }
 };
+
+export const riderOnly = (req, res, next) => {
+    if (req.user && req.user.role === "rider") {
+        next();
+    } else {
+        res.status(403).json({ message: "Rider access required" });
+    }
+};
