@@ -203,3 +203,23 @@ export const respondToOrderAssignment = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+export const deleteRider = async (req, res) => {
+    try {
+        const RiderModel = (await import("../models/Rider.js")).default;
+        const rider = await RiderModel.findOne({ _id: req.params.id, retailer: req.user.id });
+
+        if (!rider) {
+            return res.status(404).json({ success: false, message: "Rider not found" });
+        }
+
+        // Delete the associated User account
+        await User.findByIdAndDelete(rider.user);
+
+        // Delete the Rider profile
+        await RiderModel.findByIdAndDelete(req.params.id);
+
+        res.status(200).json({ success: true, message: "Rider deleted successfully" });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

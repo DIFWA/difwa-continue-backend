@@ -16,29 +16,26 @@ const seedData = async () => {
         await mongoose.connect(MONGO_URI);
         console.log('Connected to MongoDB for seeding... 🔗');
 
-        // Clear existing data
-        await User.deleteMany({});
-        await AppUser.deleteMany({});
-        await Category.deleteMany({});
-        await Product.deleteMany({});
-        await SubscriptionPlan.deleteMany({});
-        console.log('Cleared existing collections! 🗑️');
-
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash('password123', salt);
 
         // 1. Create Admin
-        const admin = await User.create({
-            name: 'Shrimpbite Admin',
-            email: 'admin@shrimpbite.com',
-            password: hashedPassword,
-            role: 'admin',
-            status: 'approved'
-        });
-        console.log('Admin created 👑');
+        let admin = await User.findOne({ email: 'admin@shrimpbite.com' });
+        if (!admin) {
+            admin = await User.create({
+                name: 'Shrimpbite Admin',
+                email: 'admin@shrimpbite.com',
+                password: hashedPassword,
+                role: 'admin',
+                status: 'approved'
+            });
+            console.log('Admin created 👑');
+        } else {
+            console.log('Admin already exists, skipping... 👑');
+        }
 
         // 2. Create Retailers
-        const retailers = await User.insertMany([
+        const retailersData = [
             {
                 name: 'Fresh catch Hub',
                 email: 'retailer1@shrimpbite.com',
@@ -63,11 +60,22 @@ const seedData = async () => {
                     location: { city: 'Vizag', state: 'Andhra Pradesh' }
                 }
             }
-        ]);
-        console.log('Retailers created 🏪');
+        ];
+
+        const retailers = [];
+        for (const r of retailersData) {
+            let retailer = await User.findOne({ email: r.email });
+            if (!retailer) {
+                retailer = await User.create(r);
+                console.log(`Retailer ${r.name} created 🏪`);
+            } else {
+                console.log(`Retailer ${r.name} already exists, skipping... 🏪`);
+            }
+            retailers.push(retailer);
+        }
 
         // 3. Create App Users (Customers)
-        await AppUser.insertMany([
+        const appUsersData = [
             {
                 fullName: 'John Doe',
                 email: 'john@example.com',
@@ -82,19 +90,39 @@ const seedData = async () => {
                 password: hashedPassword,
                 isVerified: true
             }
-        ]);
-        console.log('App Users created 👥');
+        ];
+
+        for (const u of appUsersData) {
+            const exists = await AppUser.findOne({ email: u.email });
+            if (!exists) {
+                await AppUser.create(u);
+                console.log(`App User ${u.fullName} created 👥`);
+            } else {
+                console.log(`App User ${u.fullName} already exists, skipping... 👥`);
+            }
+        }
 
         // 4. Create Categories
-        const categories = await Category.insertMany([
+        const categoriesData = [
             { name: 'Fresh Fish' },
             { name: 'Shellfish' },
             { name: 'Frozen' }
-        ]);
-        console.log('Categories created 📂');
+        ];
+
+        const categories = [];
+        for (const c of categoriesData) {
+            let category = await Category.findOne({ name: c.name });
+            if (!category) {
+                category = await Category.create(c);
+                console.log(`Category ${c.name} created 📂`);
+            } else {
+                console.log(`Category ${c.name} already exists, skipping... 📂`);
+            }
+            categories.push(category);
+        }
 
         // 5. Create Subscription Plans
-        const plans = await SubscriptionPlan.insertMany([
+        const plansData = [
             {
                 name: 'Basic',
                 description: 'Basic plan for occasional buyers',
@@ -112,16 +140,25 @@ const seedData = async () => {
                 features: ['Free Delivery', 'Priority Support'],
                 bulkOrdersAllowed: true
             }
-        ]);
-        console.log('Subscription Plans created 💎');
+        ];
+
+        for (const p of plansData) {
+            const exists = await SubscriptionPlan.findOne({ name: p.name });
+            if (!exists) {
+                await SubscriptionPlan.create(p);
+                console.log(`Subscription Plan ${p.name} created 💎`);
+            } else {
+                console.log(`Subscription Plan ${p.name} already exists, skipping... 💎`);
+            }
+        }
 
         // 6. Create Products
-        await Product.insertMany([
+        const productsData = [
             {
                 name: 'Tiger Prawns',
                 description: 'Large, juicy tiger prawns, perfect for grilling.',
                 price: 800,
-                category: categories[1]._id, // Shellfish
+                category: categories[1]._id,
                 retailer: retailers[0]._id,
                 stock: 100
             },
@@ -129,7 +166,7 @@ const seedData = async () => {
                 name: 'Rohu Fish',
                 description: 'Fresh freshwater Rohu fish.',
                 price: 350,
-                category: categories[0]._id, // Fresh Fish
+                category: categories[0]._id,
                 retailer: retailers[0]._id,
                 stock: 50
             },
@@ -137,12 +174,21 @@ const seedData = async () => {
                 name: 'Squid Rings',
                 description: 'Frozen squid rings for frying.',
                 price: 600,
-                category: categories[2]._id, // Frozen
+                category: categories[2]._id,
                 retailer: retailers[1]._id,
                 stock: 200
             }
-        ]);
-        console.log('Products created 🦐');
+        ];
+
+        for (const p of productsData) {
+            const exists = await Product.findOne({ name: p.name });
+            if (!exists) {
+                await Product.create(p);
+                console.log(`Product ${p.name} created 🦐`);
+            } else {
+                console.log(`Product ${p.name} already exists, skipping... 🦐`);
+            }
+        }
 
         console.log('Database seeded successfully! 🌱');
         process.exit(0);
