@@ -8,7 +8,8 @@ import {
     updateRiderStatusByRetailer,
     respondToOrderAssignment,
     completeDelivery,
-    deleteRider
+    deleteRider,
+    updateRider
 } from "../controllers/riderController.js";
 import { getOptimizedRouteForRider } from "../controllers/logisticsController.js";
 import { protect, riderOnly, retailerOnly } from "../middleware/authMiddleware.js";
@@ -27,6 +28,7 @@ router.get("/optimized-route", protect, riderOnly, getOptimizedRouteForRider);
 router.post("/add", protect, retailerOnly, addRider);
 router.get("/retailer", protect, retailerOnly, getRetailerRiders);
 router.patch("/retailer/:id/status", protect, retailerOnly, updateRiderStatusByRetailer);
+router.patch("/retailer/:id", protect, retailerOnly, updateRider);
 router.delete("/retailer/:id", protect, retailerOnly, deleteRider);
 
 export default router;

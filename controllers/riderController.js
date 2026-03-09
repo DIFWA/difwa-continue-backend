@@ -207,6 +207,30 @@ export const respondToOrderAssignment = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+export const updateRider = async (req, res) => {
+    try {
+        const { name, phone, vehicleType, plateNumber } = req.body;
+        const riderId = req.params.id;
+        const retailerId = req.user.id;
+
+        const rider = await RiderModel.findOne({ _id: riderId, retailer: retailerId });
+        if (!rider) return res.status(404).json({ success: false, message: "Rider not found or unauthorized" });
+
+        // Update User info
+        await User.findByIdAndUpdate(rider.user, { name, phone });
+
+        // Update Rider vehicle details
+        rider.vehicleDetails = { vehicleType, plateNumber };
+        await rider.save();
+
+        const updatedRider = await RiderModel.findById(riderId).populate("user", "name email phone");
+
+        res.status(200).json({ success: true, message: "Rider updated successfully", data: updatedRider });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 export const deleteRider = async (req, res) => {
     try {
         const RiderModel = (await import("../models/Rider.js")).default;
