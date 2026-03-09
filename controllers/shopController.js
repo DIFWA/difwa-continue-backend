@@ -127,6 +127,10 @@ export const finalizeOrderWeight = async (req, res) => {
             );
         }
 
+        // Emit real-time update
+        const retailerId = req.user.id;
+        emitOrderUpdate(orderId, "Weight Finalized", { orderId, itemId, actualWeight, actualPrice }, retailerId);
+
         res.status(200).json({ success: true, diff, newPrice: actualPrice });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

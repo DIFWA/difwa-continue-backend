@@ -190,21 +190,13 @@ export const respondToOrderAssignment = async (req, res) => {
         const { orderId, response } = req.body; // response: "Accepted" or "Rejected"
         const riderId = req.user.id;
 
-        const order = await Order.findOne({ orderId, rider: riderId });
-        if (!order) return res.status(404).json({ success: false, message: "Order not found or not assigned to you" });
+        const updatedOrder = await Order.findOne({ orderId }).populate("items.retailer");
+        const retailerId = updatedOrder?.items[0]?.retailer;
 
-        if (response === "Accepted") {
-            order.riderAssignmentStatus = "Accepted";
-            order.status = "Accepted";
-        } else if (response === "Rejected") {
-            order.riderAssignmentStatus = "Rejected";
-            order.rider = null; // Unassign rider
-        } else {
-            return res.status(400).json({ success: false, message: "Invalid response" });
-        }
+        // Emit real-time update to retailer
+        emitOrderUpdate(orderId, response, { orderId, response }, retailerId);
 
-        await order.save();
-        res.status(200).json({ success: true, message: `Order ${response.toLowerCase()} successfully`, data: order });
+        res.status(200).json({ success: true, message: `Order ${response.toLowerCase()} successfully`, data: updatedOrder });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
