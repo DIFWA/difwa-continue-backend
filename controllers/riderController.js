@@ -18,7 +18,11 @@ export const updateDeliveryStatus = async (req, res) => {
         const { orderId, status } = req.body;
         const order = await Order.findOneAndUpdate(
             { orderId, rider: req.user.id },
-            { status, deliveredAt: status === "Delivered" ? new Date() : null },
+            {
+                status,
+                deliveredAt: status === "Delivered" ? new Date() : null,
+                $set: { "items.$[].status": status }
+            },
             { new: true }
         );
 
@@ -86,7 +90,7 @@ export const completeDelivery = async (req, res) => {
             return item;
         });
 
-        order.items = updatedItems;
+        order.items = updatedItems.map(item => ({ ...item, status: "Delivered" }));
         order.status = "Delivered";
         order.deliveredAt = new Date();
         order.paymentStatus = "Paid";

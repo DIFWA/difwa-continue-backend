@@ -509,12 +509,17 @@ export const updateOrderItemStatus = async (req, res) => {
         }
 
         // Update overall order status if necessary
-        // Simple logic: if any item is still Pending, status is Processing. If all delivered, status is Delivered.
         const allItemsStatus = order.items.map(i => i.status);
         if (allItemsStatus.every(s => s === 'Delivered' || s === 'Completed')) {
             order.status = 'Delivered';
-        } else if (allItemsStatus.some(s => s === 'Processing' || s === 'Shipped')) {
+        } else if (allItemsStatus.some(s => s === 'Out for Delivery')) {
+            order.status = 'Out for Delivery';
+        } else if (allItemsStatus.some(s => s === 'Shipped')) {
+            order.status = 'Shipped';
+        } else if (allItemsStatus.some(s => s === 'Preparing' || s === 'Processing')) {
             order.status = 'Processing';
+        } else if (allItemsStatus.some(s => s === 'Accepted')) {
+            order.status = 'Accepted';
         }
 
         await order.save();

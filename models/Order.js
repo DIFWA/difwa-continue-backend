@@ -33,13 +33,18 @@ const orderSchema = new mongoose.Schema({
         },
         status: {
             type: String,
-            enum: ["Pending", "Accepted", "Preparing", "Out for Delivery", "Delivered", "Cancelled"],
+            enum: ["Pending", "Accepted", "Processing", "Preparing", "Shipped", "Out for Delivery", "Delivered", "Completed", "Cancelled"],
             default: "Pending"
         }
     }],
     totalAmount: {
         type: Number,
         required: true
+    },
+    status: {
+        type: String,
+        enum: ["Pending", "Accepted", "Processing", "Preparing", "Shipped", "Out for Delivery", "Delivered", "Completed", "Cancelled"],
+        default: "Pending"
     },
     deliveryAddress: {
         address: String,
