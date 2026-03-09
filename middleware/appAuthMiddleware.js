@@ -12,8 +12,16 @@ const protectAppUser = async (req, res, next) => {
         const token = authHeader.split(" ")[1];
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        let user;
 
-        const user = await AppUser.findById(decoded.id).select("-password");
+        if (decoded.role === "rider") {
+            const Rider = (await import("../models/User.js")).default;
+            user = await Rider.findById(decoded.id).select("-password");
+            if (user) user = { ...user.toObject(), role: "rider", id: user._id.toString() };
+        } else {
+            user = await AppUser.findById(decoded.id).select("-password");
+            if (user) user = { ...user.toObject(), role: "customer", id: user._id.toString() };
+        }
 
         if (!user) {
             return res.status(401).json({ message: "User not found" });

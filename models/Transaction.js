@@ -27,7 +27,7 @@ const transactionSchema = new mongoose.Schema({
     referenceId: String, // Razorpay Order ID or Subscription ID
     source: {
         type: String,
-        enum: ["Razorpay", "Wallet", "System Adjustment"],
+        enum: ["Razorpay", "Wallet", "System Adjustment", "Order", "Subscription"],
         required: true
     }
 }, { timestamps: true });

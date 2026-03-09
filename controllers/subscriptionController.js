@@ -16,16 +16,17 @@ export const subscribeToProduct = async (req, res) => {
         // 10 PM Cut-off Logic
         const now = new Date();
         const cutoffHour = 22; // 10 PM
+        const isPastCutoff = now.getHours() >= cutoffHour;
         const requestedStartDate = new Date(startDate || now);
 
-        const isPastCutoff = now.getHours() >= cutoffHour;
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        tomorrow.setHours(0, 0, 0, 0);
+        if (isPastCutoff) {
+            const dayAfterTomorrow = new Date();
+            dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 2);
+            dayAfterTomorrow.setHours(0, 0, 0, 0);
 
-        if (isPastCutoff && requestedStartDate <= tomorrow) {
-            // Push to day after tomorrow
-            requestedStartDate.setDate(requestedStartDate.getDate() + 1);
+            if (requestedStartDate < dayAfterTomorrow) {
+                requestedStartDate.setTime(dayAfterTomorrow.getTime());
+            }
         }
 
         const subscription = await createSubService(userId, {

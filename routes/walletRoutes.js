@@ -1,11 +1,11 @@
 import express from "express";
 import { getBalance, getTransactionHistory, topUpSuccess } from "../controllers/walletController.js";
-// import { protect } from "../middleware/authMiddleware.js"; // Assuming protection middleware exists
+import protectAppUser from "../middleware/appAuthMiddleware.js";
 
 const router = express.Router();
 
-router.get("/balance", getBalance);
-router.get("/history", getTransactionHistory);
-router.post("/topup-success", topUpSuccess);
+router.get("/balance", protectAppUser, getBalance);
+router.get("/history", protectAppUser, getTransactionHistory);
+router.post("/topup-success", protectAppUser, topUpSuccess);
 
 export default router;

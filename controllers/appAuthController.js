@@ -138,7 +138,12 @@ export const loginUser = async (req, res) => {
 
 export const getProfile = async (req, res) => {
     try {
-        return res.status(200).json({ success: true, data: req.user, message: "Profile fetched successfully" });
+        // req.user already has the 'role' added by the middleware
+        return res.status(200).json({
+            success: true,
+            data: req.user,
+            message: "Profile fetched successfully"
+        });
     } catch (error) {
         console.error("getProfile error:", error);
         return res.status(500).json({ success: false, message: "Server error" });

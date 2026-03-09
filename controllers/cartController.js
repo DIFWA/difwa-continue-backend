@@ -71,6 +71,79 @@ export const addToCart = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
+export const updateCartItem = async (req, res) => {
+    try {
+        const { productId, quantity } = req.body;
+        const userId = req.userId;
+
+        let cart = await Cart.findOne({ user: userId });
+        if (!cart) {
+            return res.status(404).json({ message: "Cart not found" });
+        }
+
+        const item = cart.items.find(
+            item => item.product.toString() === productId
+        );
+
+        if (!item) {
+            return res.status(404).json({ message: "Item not found in cart" });
+        }
+
+        const product = await Product.findById(productId);
+        if (quantity > product.stock) {
+            return res.status(400).json({
+                message: `Only ${product.stock}kg available in stock`
+            });
+        }
+
+        item.quantity = quantity;
+
+        // Remove if quantity = 0
+        if (quantity <= 0) {
+            cart.items = cart.items.filter(i => i.product.toString() !== productId);
+        }
+
+        // Reset retailer if cart empty
+        if (cart.items.length === 0) {
+            cart.retailer = null;
+        }
+
+        await cart.save();
+        res.json({ success: true, cart });
+
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+export const removeFromCart = async (req, res) => {
+    try {
+        const { productId } = req.params;
+        const userId = req.userId;
+
+        let cart = await Cart.findOne({ user: userId });
+        if (!cart) {
+            return res.status(404).json({ message: "Cart not found" });
+        }
+
+        cart.items = cart.items.filter(
+            item => item.product.toString() !== productId
+        );
+
+        // Reset retailer if cart empty
+        if (cart.items.length === 0) {
+            cart.retailer = null;
+        }
+
+        await cart.save();
+        res.json({ success: true, cart });
+
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 export const getCart = async (req, res) => {
     try {
 
