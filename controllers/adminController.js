@@ -3,8 +3,6 @@ import AppUser from "../models/AppUser.js";
 import Category from "../models/Category.js";
 import Order from "../models/Order.js";
 // --- CATEGORY CONTROLLERS ---
-
-// Get all categories with pagination and searchsdf
 export const getCategories = async (req, res) => {
     try {
         const { page = 1, limit = 10, search = "" } = req.query;

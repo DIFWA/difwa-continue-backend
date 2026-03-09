@@ -2,6 +2,7 @@ import User from "../models/User.js";
 import Product from "../models/Product.js";
 import Order from "../models/Order.js";
 import { adjustBalance } from "../services/walletService.js";
+import { emitOrderUpdate } from "../services/socketService.js";
 
 // Get all approved shops (retailers)
 export const getPublicShops = async (req, res) => {
@@ -125,6 +126,10 @@ export const finalizeOrderWeight = async (req, res) => {
                 orderId
             );
         }
+
+        // Emit real-time update
+        const retailerId = req.user.id;
+        emitOrderUpdate(orderId, "Weight Finalized", { orderId, itemId, actualWeight, actualPrice }, retailerId);
 
         res.status(200).json({ success: true, diff, newPrice: actualPrice });
     } catch (error) {
@@ -419,9 +424,10 @@ export const getRetailerOrders = async (req, res) => {
     try {
         const retailerId = req.user._id;
 
-        // Fetch all orders containing items from this retailer and populate product info
+        // Fetch all orders containing items from this retailer and populate product and rider info
         const orders = await Order.find({ "items.retailer": retailerId })
             .populate("items.product", "name")
+            .populate("rider", "name")
             .sort({ createdAt: -1 });
 
         // Calculate Stats
@@ -461,7 +467,8 @@ export const getRetailerOrders = async (req, res) => {
                 date: new Date(order.createdAt).toLocaleDateString("en-GB").replace(/\//g, "-"), // DD-MM-YYYY
                 price: retailerOrderTotal.toFixed(2),
                 payment: order.paymentStatus, // 'Paid', 'Pending', etc.
-                status: status
+                status: status,
+                rider: order.rider // Include rider info
             });
         });
 
@@ -509,15 +516,23 @@ export const updateOrderItemStatus = async (req, res) => {
         }
 
         // Update overall order status if necessary
-        // Simple logic: if any item is still Pending, status is Processing. If all delivered, status is Delivered.
         const allItemsStatus = order.items.map(i => i.status);
         if (allItemsStatus.every(s => s === 'Delivered' || s === 'Completed')) {
             order.status = 'Delivered';
-        } else if (allItemsStatus.some(s => s === 'Processing' || s === 'Shipped')) {
+        } else if (allItemsStatus.some(s => s === 'Out for Delivery')) {
+            order.status = 'Out for Delivery';
+        } else if (allItemsStatus.some(s => s === 'Shipped')) {
+            order.status = 'Shipped';
+        } else if (allItemsStatus.some(s => s === 'Preparing' || s === 'Processing')) {
             order.status = 'Processing';
+        } else if (allItemsStatus.some(s => s === 'Accepted')) {
+            order.status = 'Accepted';
         }
 
         await order.save();
+
+        // Emit real-time update
+        emitOrderUpdate(orderId, status, { orderId, status }, retailerId);
 
         res.status(200).json({ success: true, message: "Order status updated successfully", order });
     } catch (error) {
@@ -596,6 +611,10 @@ export const assignRiderToOrder = async (req, res) => {
         order.rider = riderId;
         order.riderAssignmentStatus = "Pending";
         await order.save();
+
+        // Emit real-time update
+        emitOrderUpdate(orderId, "Rider Assigned", { orderId, riderId }, retailerId);
+
         res.status(200).json({ success: true, message: "Rider assigned successfully", data: order });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

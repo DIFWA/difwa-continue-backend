@@ -18,14 +18,19 @@ export const updateDeliveryStatus = async (req, res) => {
         const { orderId, status } = req.body;
         const order = await Order.findOneAndUpdate(
             { orderId, rider: req.user.id },
-            { status, deliveredAt: status === "Delivered" ? new Date() : null },
-            { new: true }
-        );
+            {
+                status,
+                deliveredAt: status === "Delivered" ? new Date() : null,
+                $set: { "items.$[].status": status }
+            },
+        ).populate("items.retailer");
 
         if (!order) return res.status(404).json({ success: false, message: "Order not found or not assigned to you" });
 
-        // Emit real-time update to user
-        emitOrderUpdate(orderId, status, { orderId, status });
+        const retailerId = order.items[0]?.retailer;
+
+        // Emit real-time update to user and retailer
+        emitOrderUpdate(orderId, status, { orderId, status }, retailerId);
 
         res.status(200).json({ success: true, data: order });
     } catch (error) {
@@ -86,7 +91,7 @@ export const completeDelivery = async (req, res) => {
             return item;
         });
 
-        order.items = updatedItems;
+        order.items = updatedItems.map(item => ({ ...item, status: "Delivered" }));
         order.status = "Delivered";
         order.deliveredAt = new Date();
         order.paymentStatus = "Paid";
@@ -107,7 +112,8 @@ export const completeDelivery = async (req, res) => {
         // Update Rider status to Online
         await RiderModel.findOneAndUpdate({ user: riderId }, { status: "Online" });
 
-        emitOrderUpdate(`order_${orderId}`, "DELIVERED", { orderId, refund: totalRefund });
+        const retailerId = order.items[0]?.retailer;
+        emitOrderUpdate(orderId, "DELIVERED", { orderId, refund: totalRefund }, retailerId);
 
         res.status(200).json({ success: true, message: "Order delivered successfully", refund: totalRefund });
     } catch (error) {
@@ -184,21 +190,57 @@ export const respondToOrderAssignment = async (req, res) => {
         const { orderId, response } = req.body; // response: "Accepted" or "Rejected"
         const riderId = req.user.id;
 
-        const order = await Order.findOne({ orderId, rider: riderId });
-        if (!order) return res.status(404).json({ success: false, message: "Order not found or not assigned to you" });
+        const updatedOrder = await Order.findOne({ orderId }).populate("items.retailer");
+        const retailerId = updatedOrder?.items[0]?.retailer;
 
-        if (response === "Accepted") {
-            order.riderAssignmentStatus = "Accepted";
-            order.status = "Accepted";
-        } else if (response === "Rejected") {
-            order.riderAssignmentStatus = "Rejected";
-            order.rider = null; // Unassign rider
-        } else {
-            return res.status(400).json({ success: false, message: "Invalid response" });
+        // Emit real-time update to retailer
+        emitOrderUpdate(orderId, response, { orderId, response }, retailerId);
+
+        res.status(200).json({ success: true, message: `Order ${response.toLowerCase()} successfully`, data: updatedOrder });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+export const updateRider = async (req, res) => {
+    try {
+        const { name, phone, vehicleType, plateNumber } = req.body;
+        const riderId = req.params.id;
+        const retailerId = req.user.id;
+
+        const rider = await RiderModel.findOne({ _id: riderId, retailer: retailerId });
+        if (!rider) return res.status(404).json({ success: false, message: "Rider not found or unauthorized" });
+
+        // Update User info
+        await User.findByIdAndUpdate(rider.user, { name, phone });
+
+        // Update Rider vehicle details
+        rider.vehicleDetails = { vehicleType, plateNumber };
+        await rider.save();
+
+        const updatedRider = await RiderModel.findById(riderId).populate("user", "name email phone");
+
+        res.status(200).json({ success: true, message: "Rider updated successfully", data: updatedRider });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const deleteRider = async (req, res) => {
+    try {
+        const RiderModel = (await import("../models/Rider.js")).default;
+        const rider = await RiderModel.findOne({ _id: req.params.id, retailer: req.user.id });
+
+        if (!rider) {
+            return res.status(404).json({ success: false, message: "Rider not found" });
         }
 
-        await order.save();
-        res.status(200).json({ success: true, message: `Order ${response.toLowerCase()} successfully`, data: order });
+        // Delete the associated User account
+        await User.findByIdAndDelete(rider.user);
+
+        // Delete the Rider profile
+        await RiderModel.findByIdAndDelete(req.params.id);
+
+        res.status(200).json({ success: true, message: "Rider deleted successfully" });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

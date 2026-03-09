@@ -16,13 +16,48 @@ import otpRoutes from "./routes/otpRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
-
+import cronRoutes from "./routes/cronRoutes.js";
 const app = express()
 
 
 // Middleware
-app.use(cors())
+const allowedOrigins = [
+    "http://localhost:3000",
+    "https://shrimpbite-admin.vercel.app",
+    "https://shrimpbite-retailer.vercel.app"
+];
+
+app.use(cors({
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error("Not allowed by CORS"));
+        }
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
 app.use(express.json())
+// Connect to Database per request (more reliable for Vercel serverless)
+import connectDB from "./config/db.js"
+app.use(async (req, res, next) => {
+    // Skip DB connection for preflight requests to avoid timeouts/CORS errors
+    if (req.method === "OPTIONS") {
+        return next();
+    }
+
+    try {
+        await connectDB();
+        next();
+    } catch (err) {
+        console.error("DB Connection Error:", err.message);
+        res.status(500).json({ success: false, message: "Database connection failed" });
+    }
+});
+
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")))
 
 // Routes
@@ -43,6 +78,7 @@ app.use("/api/communication", communicationRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/app/orders", orderRoutes);
 app.use("/api/payment", paymentRoutes);
+app.use("/api/cron", cronRoutes);
 
 // Basic test route
 app.get("/", (req, res) => {
