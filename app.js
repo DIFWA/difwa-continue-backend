@@ -41,7 +41,6 @@ app.use(cors({
 }));
 
 app.use(express.json())
-app.use("/api/cron", cronRoutes);
 // Connect to Database per request (more reliable for Vercel serverless)
 import connectDB from "./config/db.js"
 app.use(async (req, res, next) => {
@@ -79,6 +78,7 @@ app.use("/api/communication", communicationRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/app/orders", orderRoutes);
 app.use("/api/payment", paymentRoutes);
+app.use("/api/cron", cronRoutes);
 
 // Basic test route
 app.get("/", (req, res) => {
