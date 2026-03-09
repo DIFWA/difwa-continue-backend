@@ -5,8 +5,8 @@ import { initCronJobs } from "./cron.js";
 import { initSocket } from "./services/socketService.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 
-// Connect DB
-await connectDB()
+// Connect DB - Handled by middleware in app.js for serverless compatibility
+// await connectDB()
 
 // Register routes
 app.use("/api/payment", paymentRoutes)

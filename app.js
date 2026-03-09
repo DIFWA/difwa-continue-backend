@@ -23,6 +23,18 @@ const app = express()
 // Middleware
 app.use(cors())
 app.use(express.json())
+
+// Connect to Database per request (more reliable for Vercel serverless)
+import connectDB from "./config/db.js"
+app.use(async (req, res, next) => {
+    try {
+        await connectDB();
+        next();
+    } catch (err) {
+        res.status(500).json({ success: false, message: "Database connection failed" });
+    }
+});
+
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")))
 
 // Routes
