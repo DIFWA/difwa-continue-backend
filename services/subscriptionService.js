@@ -138,7 +138,12 @@ export const generateDailyOrders = async (targetDate = new Date()) => {
 
             // 8. Socket Notification
             if (newOrder && newOrder.items && newOrder.items.length > 0) {
-                emitOrderUpdate(newOrder.orderId, "Accepted", newOrder, newOrder.items[0].retailer);
+                // Include product name in the data for better real-time display in the dashboard
+                const emitData = {
+                    ...newOrder.toObject(),
+                    product: `${sub.quantity}x ${sub.product.name}`
+                };
+                emitOrderUpdate(newOrder.orderId, "Accepted", emitData, newOrder.items[0].retailer);
             }
 
             stats.created++;
