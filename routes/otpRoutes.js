@@ -1,5 +1,6 @@
 import express from "express";
 import otpGenerator from "otp-generator";
+import jwt from "jsonwebtoken";
 import AppUser from "../models/AppUser.js";
 import Otp from "../models/Otp.js";
 
@@ -75,10 +76,24 @@ router.post("/verify", async (req, res) => {
         // Delete OTP after successful verification
         await Otp.deleteOne({ phoneNumber });
 
+        // Generate token for auto-login
+        let token = null;
+        if (user) {
+            token = jwt.sign({ id: user._id, role: "customer" }, process.env.JWT_SECRET, { expiresIn: "7d" });
+        }
+
         return res.status(200).json({
             success: true,
             message: "OTP verified successfully. User is now verified.",
-            isVerified: user ? user.isVerified : false
+            isVerified: user ? user.isVerified : false,
+            token,
+            data: user ? {
+                id: user._id,
+                fullName: user.fullName,
+                email: user.email,
+                phoneNumber: user.phoneNumber,
+                role: "customer"
+            } : null
         });
     } catch (error) {
         console.error("otp verify error:", error);
