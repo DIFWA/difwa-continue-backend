@@ -291,3 +291,41 @@ export const deleteRider = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+export const getRiderHistory = async (req, res) => {
+    try {
+        const orders = await Order.find({ rider: req.user.id })
+            .populate("user", "fullName phoneNumber")
+            .populate("items.product", "name")
+            .sort({ createdAt: -1 });
+
+        const formattedOrders = orders.map(order => ({
+            orderId: order.orderId,
+            customerName: order.user?.fullName || "Customer",
+            phoneNumber: order.user?.phoneNumber || "N/A",
+            address: order.deliveryAddress,
+            items: order.items.map(item => ({
+                name: item.product?.name || "Product",
+                quantity: item.quantity,
+                price: item.price
+            })),
+            dateTime: new Date(order.createdAt).toLocaleString("en-IN", {
+                timeZone: "Asia/Kolkata",
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true
+            }).replace(/\//g, "-"),
+            paymentMethod: order.paymentMethod,
+            totalAmount: order.totalAmount,
+            status: order.status,
+            paymentStatus: order.paymentStatus
+        }));
+
+        res.status(200).json({ success: true, data: formattedOrders });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

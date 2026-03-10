@@ -1,6 +1,7 @@
 import express from "express";
 import {
     getRiderOrders,
+    getRiderHistory,
     updateDeliveryStatus,
     updateRiderLocation,
     addRider,
@@ -18,6 +19,7 @@ const router = express.Router();
 
 // Rider Side
 router.get("/orders", protect, riderOnly, getRiderOrders);
+router.get("/history", protect, riderOnly, getRiderHistory);
 router.patch("/status", protect, riderOnly, updateDeliveryStatus);
 router.patch("/order-response", protect, riderOnly, respondToOrderAssignment);
 router.patch("/location", protect, riderOnly, updateRiderLocation);
