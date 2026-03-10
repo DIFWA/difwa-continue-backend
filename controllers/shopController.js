@@ -428,9 +428,16 @@ export const getRetailerCustomers = async (req, res) => {
 export const getRetailerOrders = async (req, res) => {
     try {
         const retailerId = req.user._id;
+        const { customerId } = req.query;
+
+        // Build query
+        const query = { "items.retailer": retailerId };
+        if (customerId) {
+            query.user = customerId;
+        }
 
         // Fetch all orders containing items from this retailer and populate product, rider, and subscription info
-        const orders = await Order.find({ "items.retailer": retailerId })
+        const orders = await Order.find(query)
             .populate("items.product", "name")
             .populate("rider", "name")
             .populate("subscriptionId", "frequency customDays")
