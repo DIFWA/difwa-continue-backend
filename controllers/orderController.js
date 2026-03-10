@@ -2,6 +2,7 @@ import Order from "../models/Order.js";
 import Cart from "../models/Cart.js";
 import Product from "../models/Product.js";
 import AppUser from "../models/AppUser.js";
+import Subscription from "../models/Subscription.js";
 import * as walletService from "../services/walletService.js";
 import { emitOrderUpdate } from "../services/socketService.js";
 
@@ -129,4 +130,33 @@ export const placeSpotOrder = async (req, res) => {
     // but placeOrder already handles one-time orders.
     // However, the user wants a specific "Order for Today" button.
     return placeOrder(req, res);
+};
+
+export const getUserOrderHistory = async (req, res) => {
+    try {
+        const userId = req.userId;
+
+        // 1. Fetch Past Orders
+        const orders = await Order.find({ user: userId })
+            .populate("items.product")
+            .populate("items.retailer", "businessDetails")
+            .populate("rider", "name phone")
+            .sort({ createdAt: -1 });
+
+        // 2. Fetch Active Plans (Subscriptions) - Including paused for history visibility
+        const subscriptions = await Subscription.find({ user: userId })
+            .populate("product")
+            .populate("retailer", "businessDetails")
+            .sort({ createdAt: -1 });
+
+        res.status(200).json({
+            success: true,
+            data: {
+                orders: orders,
+                activePlans: subscriptions
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
 };
