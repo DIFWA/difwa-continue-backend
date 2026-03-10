@@ -159,7 +159,7 @@ export const generateDailyOrders = async (targetDate = new Date()) => {
                     },
                     createdAt: newOrder.createdAt // Passing raw date for FE formatting
                 };
-                emitOrderUpdate(newOrder.orderId, "Accepted", emitData, newOrder.items[0].retailer);
+                emitOrderUpdate(newOrder.orderId, "Accepted", emitData, newOrder.items[0].retailer, sub.user);
             }
 
             stats.created++;
