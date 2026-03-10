@@ -84,7 +84,13 @@ const orderSchema = new mongoose.Schema({
         enum: ["None", "Pending", "Accepted", "Rejected"],
         default: "None"
     },
-    deliveredAt: Date
+    deliveredAt: Date,
+    statusHistory: [{
+        status: { type: String, required: true },
+        changedBy: { type: mongoose.Schema.Types.ObjectId },
+        role: { type: String, enum: ['retailer', 'rider', 'system', 'user'], default: 'system' },
+        timestamp: { type: Date, default: Date.now }
+    }]
 }, { timestamps: true });
 
 export default mongoose.model("Order", orderSchema);

@@ -2,11 +2,15 @@ import User from "../models/User.js";
 import Order from "../models/Order.js";
 import RiderModel from "../models/Rider.js";
 import bcrypt from "bcryptjs";
-import { emitOrderUpdate } from "../services/socketService.js";
+import { emitOrderUpdate, emitRiderAssigned } from "../services/socketService.js";
 
 export const getRiderOrders = async (req, res) => {
     try {
-        const orders = await Order.find({ rider: req.user.id }).populate("user", "name phone");
+        const orders = await Order.find({ rider: req.user.id })
+            .populate("user", "fullName phoneNumber")
+            .populate("items.product", "name")
+            .populate("items.retailer", "businessDetails")
+            .sort({ createdAt: -1 });
         res.status(200).json({ success: true, data: orders });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -16,21 +20,34 @@ export const getRiderOrders = async (req, res) => {
 export const updateDeliveryStatus = async (req, res) => {
     try {
         const { orderId, status } = req.body;
-        const order = await Order.findOneAndUpdate(
-            { orderId, rider: req.user.id },
-            {
-                status,
-                deliveredAt: status === "Delivered" ? new Date() : null,
-                $set: { "items.$[].status": status }
-            },
-        ).populate("items.retailer");
+        const riderId = req.user.id;
 
+        const order = await Order.findOne({ orderId, rider: riderId }).populate("items.retailer");
         if (!order) return res.status(404).json({ success: false, message: "Order not found or not assigned to you" });
 
-        const retailerId = order.items[0]?.retailer;
+        // Guard: prevent setting the same status again
+        if (order.status === status) {
+            return res.status(400).json({ success: false, message: `Order is already in '${status}' status.` });
+        }
 
-        // Emit real-time update to user and retailer
-        emitOrderUpdate(orderId, status, { orderId, status }, retailerId);
+        order.status = status;
+        if (status === "Delivered") order.deliveredAt = new Date();
+        order.items.forEach(item => { item.status = status; });
+
+        // Push to statusHistory
+        order.statusHistory = order.statusHistory || [];
+        order.statusHistory.push({
+            status,
+            changedBy: riderId,
+            role: 'rider',
+            timestamp: new Date()
+        });
+
+        await order.save();
+
+        const retailerId = order.items[0]?.retailer?._id || order.items[0]?.retailer;
+        const userId = order.user;
+        emitOrderUpdate(orderId, status, { orderId, status, statusHistory: order.statusHistory }, retailerId, userId);
 
         res.status(200).json({ success: true, data: order });
     } catch (error) {
@@ -48,7 +65,6 @@ export const updateRiderLocation = async (req, res) => {
             isOnline: true
         });
 
-        // Broadcast to active orders
         const activeOrders = await Order.find({
             rider: userId,
             status: { $in: ["Accepted", "Out for Delivery"] }
@@ -190,13 +206,47 @@ export const respondToOrderAssignment = async (req, res) => {
         const { orderId, response } = req.body; // response: "Accepted" or "Rejected"
         const riderId = req.user.id;
 
-        const updatedOrder = await Order.findOne({ orderId }).populate("items.retailer");
-        const retailerId = updatedOrder?.items[0]?.retailer;
+        const order = await Order.findOne({ orderId })
+            .populate("items.retailer")
+            .populate("user", "fullName phoneNumber _id")
+            .populate("items.product", "name");
 
-        // Emit real-time update to retailer
-        emitOrderUpdate(orderId, response, { orderId, response }, retailerId);
+        if (!order) return res.status(404).json({ success: false, message: "Order not found" });
 
-        res.status(200).json({ success: true, message: `Order ${response.toLowerCase()} successfully`, data: updatedOrder });
+        order.riderAssignmentStatus = response;
+        if (response === "Accepted") {
+            order.status = "Accepted";
+            order.rider = riderId;
+
+            // Track status history
+            order.statusHistory = order.statusHistory || [];
+            order.statusHistory.push({
+                status: "Accepted",
+                changedBy: riderId,
+                role: 'rider',
+                timestamp: new Date()
+            });
+        }
+
+        await order.save();
+
+        const retailerId = order.items[0]?.retailer?._id || order.items[0]?.retailer;
+        const userId = order.user?._id || order.user;
+
+        // Emit general order update to retailer & user rooms
+        emitOrderUpdate(orderId, response, { orderId, response, order }, retailerId, userId);
+
+        // If accepted — emit special riderAssigned popup event to user with rider details
+        if (response === "Accepted") {
+            const riderUser = await User.findById(riderId, "name phone");
+            emitRiderAssigned(orderId, userId, {
+                name: riderUser?.name || "Your Rider",
+                phone: riderUser?.phone || "",
+                riderId
+            });
+        }
+
+        res.status(200).json({ success: true, message: `Order ${response.toLowerCase()} successfully`, data: order });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -233,11 +283,7 @@ export const deleteRider = async (req, res) => {
         if (!rider) {
             return res.status(404).json({ success: false, message: "Rider not found" });
         }
-
-        // Delete the associated User account
         await User.findByIdAndDelete(rider.user);
-
-        // Delete the Rider profile
         await RiderModel.findByIdAndDelete(req.params.id);
 
         res.status(200).json({ success: true, message: "Rider deleted successfully" });

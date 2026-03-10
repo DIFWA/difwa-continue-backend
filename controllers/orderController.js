@@ -3,16 +3,31 @@ import Cart from "../models/Cart.js";
 import Product from "../models/Product.js";
 import AppUser from "../models/AppUser.js";
 import * as walletService from "../services/walletService.js";
+import { emitOrderUpdate } from "../services/socketService.js";
 
 export const placeOrder = async (req, res) => {
     try {
         const userId = req.userId;
-        const { deliveryAddress, paymentMethod } = req.body;
+        let { deliveryAddress, paymentMethod, orderType } = req.body;
 
         // 1. Fetch Cart
         const cart = await Cart.findOne({ user: userId }).populate("items.product");
         if (!cart || cart.items.length === 0) {
             return res.status(400).json({ success: false, message: "Cart is empty" });
+        }
+
+        // 1.1 Address handling (for Spot Orders where address might not be sent)
+        if (!deliveryAddress || Object.keys(deliveryAddress).length === 0) {
+            const user = await AppUser.findById(userId);
+            const defaultAddress = user?.addresses?.find(a => a.isDefault);
+            if (defaultAddress) {
+                deliveryAddress = {
+                    address: defaultAddress.fullAddress,
+                    city: defaultAddress.city,
+                    state: defaultAddress.state,
+                    pincode: defaultAddress.pincode
+                };
+            }
         }
 
         // 2. Validate Stock and Calculate Total
@@ -63,7 +78,7 @@ export const placeOrder = async (req, res) => {
             deliveryAddress,
             paymentMethod,
             paymentStatus: paymentMethod === "Wallet" ? "Paid" : "Pending",
-            orderType: "One-time"
+            orderType: orderType || "One-time"
         });
 
         // 5. Update Stock
@@ -75,6 +90,9 @@ export const placeOrder = async (req, res) => {
 
         // 6. Clear Cart
         await Cart.findOneAndDelete({ user: userId });
+
+        // 7. Socket Notification
+        emitOrderUpdate(order.orderId, "Pending", order, cart.retailer);
 
         res.status(201).json({
             success: true,
@@ -91,6 +109,8 @@ export const getMyOrders = async (req, res) => {
     try {
         const orders = await Order.find({ user: req.userId })
             .populate("items.product")
+            .populate("items.retailer", "businessDetails")
+            .populate("rider", "name phone")
             .sort({ createdAt: -1 });
 
         res.status(200).json({
@@ -100,4 +120,13 @@ export const getMyOrders = async (req, res) => {
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
+};
+
+export const placeSpotOrder = async (req, res) => {
+    // Spot orders are just one-time orders placed manually. 
+    // We can reuse the placeOrder logic but maybe with a flag or specific tagging.
+    // For now, let's just implement a dedicated endpoint if needed, 
+    // but placeOrder already handles one-time orders.
+    // However, the user wants a specific "Order for Today" button.
+    return placeOrder(req, res);
 };

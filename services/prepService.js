@@ -8,62 +8,61 @@ export const getDailyPrepList = async (retailerId, dateString) => {
     const nextDay = new Date(date);
     nextDay.setDate(date.getDate() + 1);
 
-    // 1. Find all active subscriptions for this retailer
-    // Note: This matches the daily order generation logic
     const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'long' });
 
-    // Find subscriptions that should deliver on this day
-    const activeSubscriptions = await Subscription.find({
-        retailer: retailerId,
-        status: 'Active',
-        deliveryDays: dayOfWeek,
-        startDate: { $lte: date },
-        $or: [
-            { endDate: { $exists: false } },
-            { endDate: { $gte: date } }
-        ]
-    }).populate('product');
+    // Fetch subscription orders already created for today
+    const subscriptionOrders = await Order.find({
+        "items.retailer": retailerId,
+        orderType: "Subscription",
+        createdAt: { $gte: date, $lt: nextDay },
+        status: { $nin: ["Cancelled", "Delivered"] }
+    }).populate("items.product");
 
-    // 2. Find one-time orders for this retailer on this day
+    // Also include active one-time orders for today
     const oneTimeOrders = await Order.find({
-        retailer: retailerId,
-        orderType: 'One-time',
-        deliveryDate: { $gte: date, $lt: nextDay },
-        status: { $nin: ['Cancelled', 'Delivered'] }
-    }).populate('items.product');
+        "items.retailer": retailerId,
+        orderType: "One-time",
+        createdAt: { $gte: date, $lt: nextDay },
+        status: { $nin: ["Cancelled", "Delivered"] }
+    }).populate("items.product");
 
-    // 3. Aggregate requirements
     const requirements = {};
 
-    activeSubscriptions.forEach(sub => {
-        const prodId = sub.product._id.toString();
+    const addItemToRequirements = (item, type) => {
+        if (!item.product) return;
+        const prodId = item.product._id.toString();
         if (!requirements[prodId]) {
             requirements[prodId] = {
-                productName: sub.product.name,
-                category: sub.product.category,
+                id: prodId,
+                productName: item.product.name,
+                category: item.product.category || "Uncategorized",
                 quantity: 0,
-                unit: sub.product.unit || 'kg',
-                orderCount: 0
+                unit: item.product.unit || "kg",
+                orderCount: 0,
+                subscriptionCount: 0,
+                oneTimeCount: 0,
+                status: "Pending"
             };
         }
-        requirements[prodId].quantity += sub.quantity;
+        requirements[prodId].quantity += item.quantity;
         requirements[prodId].orderCount += 1;
+        if (type === "Subscription") requirements[prodId].subscriptionCount += 1;
+        else requirements[prodId].oneTimeCount += 1;
+    };
+
+    subscriptionOrders.forEach(order => {
+        order.items.forEach(item => {
+            if (item.retailer && item.retailer.toString() === retailerId.toString()) {
+                addItemToRequirements(item, "Subscription");
+            }
+        });
     });
 
     oneTimeOrders.forEach(order => {
         order.items.forEach(item => {
-            const prodId = item.product._id.toString();
-            if (!requirements[prodId]) {
-                requirements[prodId] = {
-                    productName: item.product.name,
-                    category: item.product.category,
-                    quantity: 0,
-                    unit: item.product.unit || 'kg',
-                    orderCount: 0
-                };
+            if (item.retailer && item.retailer.toString() === retailerId.toString()) {
+                addItemToRequirements(item, "One-time");
             }
-            requirements[prodId].quantity += item.quantity;
-            requirements[prodId].orderCount += 1;
         });
     });
 

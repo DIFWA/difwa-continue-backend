@@ -3,7 +3,9 @@ import { generateDailyOrders } from "../services/subscriptionService.js";
 export const runDailySubscriptionCron = async (req, res) => {
     try {
 
-        if (req.headers["x-cron-secret"] !== process.env.CRON_SECRET) {
+        const cronSecret = process.env.CRON_SECRET;
+        // If CRON_SECRET is not configured (dev mode), allow without auth
+        if (cronSecret && req.headers["x-cron-secret"] !== cronSecret) {
             return res.status(403).json({ message: "Unauthorized cron access" });
         }
 

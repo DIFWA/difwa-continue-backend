@@ -464,11 +464,12 @@ export const getRetailerOrders = async (req, res) => {
             formattedOrders.push({
                 id: order.orderId || `#${order._id.toString().slice(-6).toUpperCase()}`,
                 product: productNames.join(", "),
-                date: new Date(order.createdAt).toLocaleDateString("en-GB").replace(/\//g, "-"), // DD-MM-YYYY
+                date: new Date(order.createdAt).toLocaleDateString("en-GB").replace(/\//g, "-"),
                 price: retailerOrderTotal.toFixed(2),
-                payment: order.paymentStatus, // 'Paid', 'Pending', etc.
+                payment: order.paymentStatus,
                 status: status,
-                rider: order.rider // Include rider info
+                orderType: order.orderType || ((order.orderId || "").startsWith("SUB-") ? "Subscription" : "One-time"),
+                rider: order.rider
             });
         });
 
@@ -499,8 +500,13 @@ export const updateOrderItemStatus = async (req, res) => {
         const { orderId, status } = req.body;
         const retailerId = req.user._id;
 
-        const order = await Order.findOne({ orderId });
+        const order = await Order.findOne({ orderId }).populate('user', '_id');
         if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+
+        // Guard: prevent setting the same status again
+        if (order.status === status) {
+            return res.status(400).json({ success: false, message: `Order is already in '${status}' status.` });
+        }
 
         // Update all items belonging to this retailer in this order
         let updated = false;
@@ -529,10 +535,20 @@ export const updateOrderItemStatus = async (req, res) => {
             order.status = 'Accepted';
         }
 
+        // Push to statusHistory audit trail
+        order.statusHistory = order.statusHistory || [];
+        order.statusHistory.push({
+            status,
+            changedBy: retailerId,
+            role: 'retailer',
+            timestamp: new Date()
+        });
+
         await order.save();
 
-        // Emit real-time update
-        emitOrderUpdate(orderId, status, { orderId, status }, retailerId);
+        // Emit real-time update to order room, retailer room, and user room
+        const userId = order.user?._id || order.user;
+        emitOrderUpdate(orderId, status, { orderId, status, statusHistory: order.statusHistory }, retailerId, userId);
 
         res.status(200).json({ success: true, message: "Order status updated successfully", order });
     } catch (error) {

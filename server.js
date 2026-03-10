@@ -11,11 +11,6 @@ import paymentRoutes from "./routes/paymentRoutes.js";
 // Register routes
 app.use("/api/payment", paymentRoutes)
 
-/*
------------------------------------------
-Disabled for Vercel serverless deployment
------------------------------------------
-
 // Start Server
 const PORT = process.env.PORT || 5000
 const server = app.listen(PORT, () => {
@@ -26,7 +21,6 @@ const server = app.listen(PORT, () => {
 // Init Socket.io
 initSocket(server);
 
-*/
 
 // Export app for Vercel
 export default app;

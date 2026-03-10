@@ -6,7 +6,6 @@ export const getOptimizedRouteForRider = async (req, res) => {
     try {
         const riderId = req.user.id;
 
-        // 1. Get active orders for this rider
         const orders = await Order.find({
             rider: riderId,
             status: { $in: ["Accepted", "Preparing", "Out for Delivery"] }
@@ -16,14 +15,12 @@ export const getOptimizedRouteForRider = async (req, res) => {
             return res.status(200).json({ success: true, data: [], message: "No active orders for routing" });
         }
 
-        // 2. Get rider's current location (or starting point)
         const rider = await User.findById(riderId);
         const origin = {
-            lat: rider.location?.coordinates[1] || 12.9716, // Default to Bangalore if missing
+            lat: rider.location?.coordinates[1] || 12.9716,
             lng: rider.location?.coordinates[0] || 77.5946
         };
 
-        // 3. Prepare destinations
         const destinations = orders.map(order => ({
             lat: order.deliveryAddress.coordinates.lat,
             lng: order.deliveryAddress.coordinates.lng,
