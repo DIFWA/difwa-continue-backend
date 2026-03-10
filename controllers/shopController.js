@@ -424,10 +424,11 @@ export const getRetailerOrders = async (req, res) => {
     try {
         const retailerId = req.user._id;
 
-        // Fetch all orders containing items from this retailer and populate product and rider info
+        // Fetch all orders containing items from this retailer and populate product, rider, and subscription info
         const orders = await Order.find({ "items.retailer": retailerId })
             .populate("items.product", "name")
             .populate("rider", "name")
+            .populate("subscriptionId", "frequency customDays")
             .sort({ createdAt: -1 });
 
         // Calculate Stats
@@ -464,12 +465,24 @@ export const getRetailerOrders = async (req, res) => {
             formattedOrders.push({
                 id: order.orderId || `#${order._id.toString().slice(-6).toUpperCase()}`,
                 product: productNames.join(", "),
-                date: new Date(order.createdAt).toLocaleDateString("en-GB").replace(/\//g, "-"),
+                date: new Date(order.createdAt).toLocaleString("en-GB", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: true
+                }).replace(/\//g, "-"),
                 price: retailerOrderTotal.toFixed(2),
                 payment: order.paymentStatus,
                 status: status,
                 orderType: order.orderType || ((order.orderId || "").startsWith("SUB-") ? "Subscription" : "One-time"),
-                rider: order.rider
+                rider: order.rider,
+                subscriptionDetails: order.subscriptionId ? {
+                    frequency: order.subscriptionId.frequency,
+                    customDays: order.subscriptionId.customDays
+                } : null,
+                statusHistory: order.statusHistory
             });
         });
 

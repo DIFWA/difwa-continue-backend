@@ -149,10 +149,15 @@ export const generateDailyOrders = async (targetDate = new Date()) => {
 
             // 8. Socket Notification
             if (newOrder && newOrder.items && newOrder.items.length > 0) {
-                // Include product name in the data for better real-time display in the dashboard
+                // Include product name and subscription details in the data for better real-time display
                 const emitData = {
                     ...newOrder.toObject(),
-                    product: `${sub.quantity}x ${sub.product.name}`
+                    product: `${sub.quantity}x ${sub.product.name}`,
+                    subscriptionDetails: {
+                        frequency: sub.frequency,
+                        customDays: sub.customDays
+                    },
+                    createdAt: newOrder.createdAt // Passing raw date for FE formatting
                 };
                 emitOrderUpdate(newOrder.orderId, "Accepted", emitData, newOrder.items[0].retailer);
             }
