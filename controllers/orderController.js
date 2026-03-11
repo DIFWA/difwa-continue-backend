@@ -36,6 +36,7 @@ export const placeOrder = async (req, res) => {
         const orderItems = [];
 
         for (const item of cart.items) {
+            const currentPrice = item.product.price; // Always use latest price from populated product
             if (item.product.stock < item.quantity) {
                 return res.status(400).json({
                     success: false,
@@ -43,12 +44,12 @@ export const placeOrder = async (req, res) => {
                 });
             }
 
-            totalAmount += item.price * item.quantity;
+            totalAmount += currentPrice * item.quantity;
             orderItems.push({
                 product: item.product._id,
                 retailer: cart.retailer,
                 quantity: item.quantity,
-                price: item.price,
+                price: currentPrice,
                 status: "Pending"
             });
         }
@@ -57,9 +58,12 @@ export const placeOrder = async (req, res) => {
         if (paymentMethod === "Wallet") {
             const user = await AppUser.findById(userId);
             if (!user || user.walletBalance < totalAmount) {
+                const cartSummary = cart.items.map(i => `${i.quantity}x ${i.product.name} (@₹${i.product.price})`).join(", ");
+                console.log(`[PAYMENT_FAILED] User ${userId} insufficient balance. Total: ₹${totalAmount}, Balance: ₹${user?.walletBalance}, Items: ${cartSummary}`);
+
                 return res.status(400).json({
                     success: false,
-                    message: `Insufficient wallet balance. Total: ₹${totalAmount}, Current: ₹${user?.walletBalance || 0}`
+                    message: `Insufficient wallet balance. Total: ₹${totalAmount}, Current: ₹${user?.walletBalance || 0}. (Items: ${cart.items.length})`
                 });
             }
 

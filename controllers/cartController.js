@@ -41,6 +41,7 @@ export const addToCart = async (req, res) => {
                 });
             }
             existingItem.quantity = newQuantity;
+            existingItem.price = product.price; // Update to latest price
         } else {
             if (quantity > product.stock) {
                 return res.status(400).json({
