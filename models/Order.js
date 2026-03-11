@@ -33,7 +33,7 @@ const orderSchema = new mongoose.Schema({
         },
         status: {
             type: String,
-            enum: ["Pending", "Accepted", "Processing", "Preparing", "Shipped", "Out for Delivery", "Delivered", "Completed", "Cancelled"],
+            enum: ["Pending", "Accepted", "Processing", "Preparing", "Shipped", "Out for Delivery", "Delivered", "Completed", "Cancelled", "Rider Assigned", "Rider Accepted"],
             default: "Pending"
         }
     }],
@@ -43,7 +43,7 @@ const orderSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ["Pending", "Accepted", "Processing", "Preparing", "Shipped", "Out for Delivery", "Delivered", "Completed", "Cancelled"],
+        enum: ["Pending", "Accepted", "Processing", "Preparing", "Shipped", "Out for Delivery", "Delivered", "Completed", "Cancelled", "Rider Assigned", "Rider Accepted"],
         default: "Pending"
     },
     deliveryAddress: {

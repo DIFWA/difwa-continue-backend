@@ -661,6 +661,7 @@ export const assignRiderToOrder = async (req, res) => {
         if (!order) return res.status(404).json({ success: false, message: "Order not found or access denied" });
         order.rider = riderId;
         order.riderAssignmentStatus = "Pending";
+        order.status = "Rider Assigned"; // Sync main order status
         await order.save();
 
         // Emit real-time update
