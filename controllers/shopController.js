@@ -575,6 +575,18 @@ export const updateOrderItemStatus = async (req, res) => {
         const userId = order.user?._id || order.user;
         emitOrderUpdate(orderId, status, { orderId, status, statusHistory: order.statusHistory }, retailerId, userId);
 
+        // Notify Retailer if status is Delivered
+        if (status === "Delivered") {
+            const customer = await (await import("../models/AppUser.js")).default.findById(userId);
+            const retailerUser = await User.findById(retailerId);
+            createNotification(retailerId.toString(), {
+                title: `Order Delivered! 🎉`,
+                message: `Order #${orderId.slice(-6).toUpperCase()} delivered to ${customer?.fullName || "Customer"} customer by your team.`,
+                type: "Order",
+                referenceId: orderId
+            });
+        }
+
         res.status(200).json({ success: true, message: "Order status updated successfully", order });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

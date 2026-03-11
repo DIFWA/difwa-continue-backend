@@ -51,12 +51,23 @@ export const updateDeliveryStatus = async (req, res) => {
         emitOrderUpdate(orderId, status, { orderId, status, statusHistory: order.statusHistory }, retailerId, userId);
 
         // Notify Retailer of status change
-        createNotification(retailerId.toString(), {
-            title: `Order Update: ${status} 📦`,
-            message: `Order #${orderId.slice(-6)} is now ${status.toLowerCase()}.`,
-            type: "Order",
-            referenceId: orderId
-        });
+        if (status === "Delivered") {
+            const customer = await (await import("../models/AppUser.js")).default.findById(userId);
+            const riderTemp = await User.findById(riderId);
+            createNotification(retailerId.toString(), {
+                title: `Order Delivered! 🎉`,
+                message: `Order #${orderId.slice(-6).toUpperCase()} delivered to ${customer?.fullName || "Customer"} customer by rider ${riderTemp?.name || "Rider"}.`,
+                type: "Order",
+                referenceId: orderId
+            });
+        } else {
+            createNotification(retailerId.toString(), {
+                title: `Order Update: ${status} 📦`,
+                message: `Order #${orderId.slice(-6)} is now ${status.toLowerCase()}.`,
+                type: "Order",
+                referenceId: orderId
+            });
+        }
 
         res.status(200).json({ success: true, data: order });
     } catch (error) {
@@ -139,6 +150,16 @@ export const completeDelivery = async (req, res) => {
 
         const retailerId = order.items[0]?.retailer;
         emitOrderUpdate(orderId, "DELIVERED", { orderId, refund: totalRefund }, retailerId);
+
+        // Notify Retailer of delivery
+        const customer = await (await import("../models/AppUser.js")).default.findById(order.user);
+        const riderTemp = await User.findById(riderId);
+        createNotification(retailerId.toString(), {
+            title: `Order Delivered! 🎉`,
+            message: `Order #${orderId.slice(-6).toUpperCase()} delivered to ${customer?.fullName || "Customer"} customer by rider ${riderTemp?.name || "Rider"}.`,
+            type: "Order",
+            referenceId: orderId
+        });
 
         res.status(200).json({ success: true, message: "Order delivered successfully", refund: totalRefund });
     } catch (error) {
