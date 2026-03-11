@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs"
 import jwt from "jsonwebtoken"
 import User from "../models/User.js"
+import { createNotification } from "../services/notificationService.js";
 
 // Register
 export const registerUser = async (req, res) => {
@@ -22,6 +23,12 @@ export const registerUser = async (req, res) => {
         })
 
         await newUser.save()
+
+        createNotification(newUser._id.toString(), {
+            title: "Welcome to Shrimpbite! 🦐",
+            message: "Your retailer account has been created. Please complete your onboarding to start selling.",
+            type: "System"
+        });
 
         const token = jwt.sign({ id: newUser._id, role: "retailer" }, process.env.JWT_SECRET, { expiresIn: "1d" })
 

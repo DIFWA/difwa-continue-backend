@@ -1,4 +1,5 @@
 import Product from "../models/Product.js";
+import { createNotification } from "../services/notificationService.js";
 
 // Get all products for the logged-in retailer
 export const getRetailerProducts = async (req, res) => {

@@ -150,3 +150,32 @@ export const emitChatUpdate = async (chatId, message) => {
         }
     }
 };
+
+export const emitNotification = async (recipientId, notification) => {
+    const room = `retailer_notifications_${recipientId}`;
+    const payload = { ...notification, createdAt: new Date() };
+
+    _log("Emitting Notification", { data: { room, title: notification.title } });
+
+    if (io) {
+        io.to(room).emit("notification", payload);
+    }
+
+    const relayUrl = process.env.SOCKET_RELAY_URL;
+    if (relayUrl) {
+        try {
+            await fetch(`${relayUrl}/emit`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    secret: process.env.SOCKET_SECRET || "shrimpbite_socket_relay_secret_2026",
+                    event: "notification",
+                    room: room,
+                    data: payload
+                })
+            });
+        } catch (error) {
+            console.error("Relay notification emit failed:", error.message);
+        }
+    }
+};

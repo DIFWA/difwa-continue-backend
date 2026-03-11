@@ -3,6 +3,7 @@ import Order from "../models/Order.js";
 import RiderModel from "../models/Rider.js";
 import bcrypt from "bcryptjs";
 import { emitOrderUpdate, emitRiderAssigned } from "../services/socketService.js";
+import { createNotification } from "../services/notificationService.js";
 
 export const getRiderOrders = async (req, res) => {
     try {
@@ -48,6 +49,14 @@ export const updateDeliveryStatus = async (req, res) => {
         const retailerId = order.items[0]?.retailer?._id || order.items[0]?.retailer;
         const userId = order.user;
         emitOrderUpdate(orderId, status, { orderId, status, statusHistory: order.statusHistory }, retailerId, userId);
+
+        // Notify Retailer of status change
+        createNotification(retailerId.toString(), {
+            title: `Order Update: ${status} 📦`,
+            message: `Order #${orderId.slice(-6)} is now ${status.toLowerCase()}.`,
+            type: "Order",
+            referenceId: orderId
+        });
 
         res.status(200).json({ success: true, data: order });
     } catch (error) {
@@ -235,6 +244,16 @@ export const respondToOrderAssignment = async (req, res) => {
 
         // Emit general order update to retailer & user rooms
         emitOrderUpdate(orderId, response, { orderId, response, order }, retailerId, userId);
+
+        // Notify Retailer when rider accepts
+        if (response === "Accepted") {
+            createNotification(retailerId.toString(), {
+                title: "Rider Assigned! 🏍️",
+                message: `A rider has accepted order #${orderId.slice(-6)}.`,
+                type: "Rider",
+                referenceId: orderId
+            });
+        }
 
         // If accepted — emit special riderAssigned popup event to user with rider details
         if (response === "Accepted") {

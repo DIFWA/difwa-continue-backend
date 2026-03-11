@@ -5,6 +5,7 @@ import AppUser from "../models/AppUser.js";
 import Subscription from "../models/Subscription.js";
 import * as walletService from "../services/walletService.js";
 import { emitOrderUpdate } from "../services/socketService.js";
+import { createNotification } from "../services/notificationService.js";
 
 export const placeOrder = async (req, res) => {
     try {
@@ -86,11 +87,22 @@ export const placeOrder = async (req, res) => {
             orderType: orderType || "One-time"
         });
 
-        // 5. Update Stock
+        // 5. Update Stock & Check for Low Inventory
         for (const item of cart.items) {
-            await Product.findByIdAndUpdate(item.product._id, {
-                $inc: { stock: -item.quantity }
-            });
+            const updatedProduct = await Product.findByIdAndUpdate(
+                item.product._id,
+                { $inc: { stock: -item.quantity } },
+                { new: true }
+            );
+
+            if (updatedProduct.stock <= 5) {
+                createNotification(cart.retailer.toString(), {
+                    title: "Low Inventory Alert! ⚠️",
+                    message: `Product "${updatedProduct.name}" is running low on stock (${updatedProduct.stock}kg left).`,
+                    type: "Inventory",
+                    referenceId: updatedProduct._id.toString()
+                });
+            }
         }
 
         // 6. Clear Cart
@@ -98,6 +110,14 @@ export const placeOrder = async (req, res) => {
 
         // 7. Socket Notification
         emitOrderUpdate(order.orderId, "Pending", order, cart.retailer, userId);
+
+        // Create Notification for Retailer
+        createNotification(cart.retailer.toString(), {
+            title: "New Order Received! 🦐",
+            message: `You have a new order (#${order._id.toString().slice(-6)}) for ₹${totalAmount}.`,
+            type: "Order",
+            referenceId: order._id.toString()
+        });
 
         res.status(201).json({
             success: true,
