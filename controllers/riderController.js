@@ -268,17 +268,15 @@ export const respondToOrderAssignment = async (req, res) => {
 
         // Notify Retailer when rider accepts
         if (response === "Accepted") {
+            const riderUser = await User.findById(riderId, "name phone");
             createNotification(retailerId.toString(), {
                 title: "Rider Assigned! 🏍️",
-                message: `A rider has accepted order #${orderId.slice(-6)}.`,
+                message: `Rider ${riderUser?.name || "A rider"} has accepted order #${orderId.slice(-6)}.`,
                 type: "Rider",
                 referenceId: orderId
             });
-        }
 
-        // If accepted — emit special riderAssigned popup event to user with rider details
-        if (response === "Accepted") {
-            const riderUser = await User.findById(riderId, "name phone");
+            // Emit special riderAssigned popup event to user with rider details
             emitRiderAssigned(orderId, userId, {
                 name: riderUser?.name || "Your Rider",
                 phone: riderUser?.phone || "",
