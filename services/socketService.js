@@ -59,50 +59,47 @@ export const getIO = () => {
 
 // Simplified emitters for common events
 export const emitOrderUpdate = async (orderId, status, data, retailerId = null, userId = null, riderId = null) => {
-    // 1. Determine all possible order rooms (ORD-XXX and potentially Mongo _id)
+    // 1. Determine all possible order rooms
     const rooms = [`order_${orderId}`, "admin"];
     
-    // If data contains the full order object, also emit to the Mongo _id room
-    // This handles cases where Flutter developer might join using the database ID
+    // Add Mongo ID room if available (handles cases where client joins using database ID)
     const mongoId = data?._id || data?.order?._id;
     if (mongoId && mongoId.toString() !== orderId.toString()) {
-        rooms.push(`order_${mongoId}`);
+        rooms.push(`order_${mongoId.toString()}`);
     }
 
-    if (retailerId) rooms.push(`retailer_${retailerId}`);
-    if (userId) rooms.push(`user_${userId}`);
-    if (riderId) rooms.push(`rider_${riderId}`);
+    if (retailerId) rooms.push(`retailer_${retailerId.toString()}`);
+    if (userId) rooms.push(`user_${userId.toString()}`);
+    if (riderId) rooms.push(`rider_${riderId.toString()}`);
 
     const payload = { status, data, orderId };
-    _log("Emitting Order Update", { data: { rooms, status, orderId } });
-
-    // 1. Local emit
+    
+    // 1. Local emit - DO THIS FIRST to ensure immediate local feedback
     if (io) {
+        _log(`Emitting locally to ${rooms.length} rooms`, { status: "INFO", data: rooms });
         rooms.forEach(room => {
             io.to(room).emit("orderUpdate", payload);
         });
     }
 
-    // 2. Relay emit (for Vercel)
+    // 2. Relay emit (for Vercel/External Dashboards)
+    // We do NOT await this anymore to keep the API responsive
     const relayUrl = process.env.SOCKET_RELAY_URL;
     if (relayUrl) {
-        try {
-            // Use Promise.all to await all relay sends
-            await Promise.all(rooms.map(room => 
-                fetch(`${relayUrl}/emit`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        secret: process.env.SOCKET_SECRET || "shrimpbite_socket_relay_secret_2026",
-                        event: "orderUpdate",
-                        room: room,
-                        data: payload
-                    })
+        Promise.all(rooms.map(room => 
+            fetch(`${relayUrl}/emit`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    secret: process.env.SOCKET_SECRET || "shrimpbite_socket_relay_secret_2026",
+                    event: "orderUpdate",
+                    room: room,
+                    data: payload
                 })
-            ));
-        } catch (error) {
-            console.error("Relay emit failed:", error.message);
-        }
+            })
+        )).catch(error => {
+            console.error("Relay emit background failed:", error.message);
+        });
     }
 };
 
