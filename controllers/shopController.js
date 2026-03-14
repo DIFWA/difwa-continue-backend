@@ -18,7 +18,7 @@ export const getPublicShops = async (req, res) => {
         }
 
         const shops = await User.find(query)
-            .select("name email businessDetails createdAt")
+            .select("name email businessDetails isShopActive createdAt")
             .sort({ createdAt: -1 });
 
         const minimalShops = shops.map(shop => ({
@@ -45,7 +45,7 @@ export const getPublicShops = async (req, res) => {
 export const getShopDetails = async (req, res) => {
     try {
         const shop = await User.findOne({ _id: req.params.id, role: "retailer", status: "approved" })
-            .select("businessDetails name email");
+            .select("businessDetails name email isShopActive");
 
         if (!shop) {
             return res.status(404).json({ success: false, message: "Shop not found or not approved" });
