@@ -4,6 +4,7 @@ import otpGenerator from "otp-generator";
 import AppUser from "../models/AppUser.js";
 import Otp from "../models/Otp.js";
 import { sendWelcomeEmail } from "../services/emailService.js";
+import admin from "firebase-admin";
 // Register
 export const registerUser = async (req, res) => {
     try {
@@ -344,5 +345,103 @@ export const deleteAddress = async (req, res) => {
     } catch (error) {
         console.error("deleteAddress error:", error);
         return res.status(500).json({ success: false, message: "Server error" });
+    }
+};
+// Google Auth (Firebase)
+export const googleAuth = async (req, res) => {
+    try {
+        const { idToken, phoneNumber } = req.body;
+
+        if (!idToken) {
+            return res.status(400).json({ success: false, message: "ID Token is required" });
+        }
+
+        // Verify Firebase Token
+        let decodedToken;
+        try {
+            decodedToken = await admin.auth().verifyIdToken(idToken);
+        } catch (error) {
+            console.error("Firebase token verification failed:", error.message);
+            return res.status(401).json({ success: false, message: "Invalid or expired Firebase token" });
+        }
+
+        const { email, name, uid, picture } = decodedToken;
+
+        // 1. Try to find user by Firebase UID
+        let user = await AppUser.findOne({ firebaseUid: uid });
+
+        // 2. If not found by UID, try by Email
+        if (!user && email) {
+            user = await AppUser.findOne({ email });
+        }
+
+        // 3. Handle New User / Missing Phone Number
+        if (!user) {
+            // New User flow
+            if (!phoneNumber) {
+                // Return verified info so the app can show a screen to get the phone number
+                return res.status(200).json({
+                    success: true,
+                    new_user: true,
+                    message: "User not found. Please provide a phone number to complete registration.",
+                    temp_data: { email, name, uid }
+                });
+            }
+
+            // Check if phone number already belongs to another user
+            const phoneExists = await AppUser.findOne({ phoneNumber });
+            if (phoneExists) {
+                return res.status(400).json({ success: false, message: "Phone number already in use by another account" });
+            }
+
+            // Create new Google User
+            user = await AppUser.create({
+                fullName: name,
+                email,
+                phoneNumber,
+                firebaseUid: uid,
+                isGoogleUser: true,
+                isVerified: true // Google email is verified
+            });
+
+            // Send welcome email
+            try {
+                await sendWelcomeEmail(user.email, user.fullName);
+            } catch (error) {
+                console.log("Welcome email failed:", error.message);
+            }
+        } else {
+            // Existing user flow - Ensure fields are updated if needed
+            let updated = false;
+            if (!user.firebaseUid) {
+                user.firebaseUid = uid;
+                updated = true;
+            }
+            if (!user.isGoogleUser) {
+                user.isGoogleUser = true;
+                updated = true;
+            }
+            if (updated) await user.save();
+        }
+
+        // Finalize Login
+        const token = jwt.sign({ id: user._id, role: "customer" }, process.env.JWT_SECRET, { expiresIn: "7d" });
+
+        return res.status(200).json({
+            success: true,
+            message: "Google login successful",
+            token,
+            data: {
+                id: user._id,
+                fullName: user.fullName,
+                email: user.email,
+                phoneNumber: user.phoneNumber,
+                role: "customer"
+            },
+        });
+
+    } catch (error) {
+        console.error("googleAuth error:", error);
+        return res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };

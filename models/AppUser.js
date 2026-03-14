@@ -28,7 +28,16 @@ const appUserSchema = new mongoose.Schema(
         },
         password: {
             type: String,
-            required: true,
+            required: false,
+        },
+        firebaseUid: {
+            type: String,
+            unique: true,
+            sparse: true
+        },
+        isGoogleUser: {
+            type: Boolean,
+            default: false
         },
         addresses: [
             {

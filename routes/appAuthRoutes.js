@@ -6,6 +6,7 @@ const router = express.Router();
 import {
     registerUser,
     loginUser,
+    googleAuth,
     getProfile,
     updateProfile,
     updateName,

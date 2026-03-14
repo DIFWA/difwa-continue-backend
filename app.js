@@ -1,5 +1,6 @@
 import express from "express"
 import cors from "cors"
+import "./config/firebase.js"
 import path from "path"
 import authRoutes from "./routes/authRoutes.js"
 import adminRoutes from "./routes/adminRoutes.js"
