@@ -226,7 +226,8 @@ export const getRetailerDashboardStats = async (req, res) => {
                     totalOrders,
                     newOrders: newOrdersCount,
                     activeProducts,
-                    totalCustomers
+                    totalCustomers,
+                    isShopActive: (await User.findById(retailerId)).isShopActive
                 },
                 chartData
             }

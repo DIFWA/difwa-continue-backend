@@ -32,7 +32,7 @@ export const registerUser = async (req, res) => {
 
         const token = jwt.sign({ id: newUser._id, role: "retailer" }, process.env.JWT_SECRET, { expiresIn: "1d" })
 
-        res.status(201).json({ token, user: { _id: newUser._id, name, email, status: newUser.status, role: "retailer" } })
+        res.status(201).json({ token, user: { _id: newUser._id, name, email, status: newUser.status, role: "retailer", isShopActive: newUser.isShopActive } })
     } catch (error) {
         console.error(error)
         res.status(500).json({ message: error.message || "Something went wrong" })
@@ -70,7 +70,8 @@ export const loginUser = async (req, res) => {
                 name: user.name,
                 email,
                 status: user.status,
-                role: user.role
+                role: user.role,
+                isShopActive: user.isShopActive
             }
         })
     } catch (error) {
