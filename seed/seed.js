@@ -9,7 +9,7 @@ import Category from '../models/Category.js';
 import Product from '../models/Product.js';
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
 
-const MONGO_URI = process.env.MONGO_URI;
+const MONGO_URI = "mongodb+srv://rohit2026d_db_user:prfZj3SaGsRP24GJ@difmo.dqctpsj.mongodb.net/difwa?appName=Difmo";
 
 const seedData = async () => {
     try {
@@ -38,7 +38,7 @@ const seedData = async () => {
         const retailersData = [
             {
                 name: 'Fresh catch Hub',
-                email: 'retailer1@shrimpbite.com',
+                email: '    ',
                 password: hashedPassword,
                 role: 'retailer',
                 status: 'approved',
