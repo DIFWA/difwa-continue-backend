@@ -1,7 +1,7 @@
 
 import { io } from "socket.io-client";
 
-const SOCKET_URL = "http://localhost:5000"; // Update if needed
+const SOCKET_URL = "https://difwa-backend.vercel.app"; // Update if needed
 
 console.log(`📡 Connecting to Socket at ${SOCKET_URL}...`);
 

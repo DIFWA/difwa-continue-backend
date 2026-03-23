@@ -26,9 +26,8 @@ const app = express()
 
 // Middleware
 const allowedOrigins = [
-    "http://localhost:3000",
-    "https://shrimpbite-admin.vercel.app",
-    "https://shrimpbite-retailer.vercel.app"
+    "https://difwa-frontend.vercel.app"
+
 ];
 
 app.use(cors({
@@ -89,7 +88,7 @@ app.use("/api/app/search", searchRoutes);
 
 // Basic test route
 app.get("/", (req, res) => {
-    res.send("Shrimpbite Backend Running 🦐")
+    res.send("Difwa Backend Running ")
 })
 
 export default app

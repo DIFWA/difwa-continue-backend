@@ -2,7 +2,7 @@
 /**
  * native node fetch version (Requires Node 18+)
  */
-const BASE_URL = 'http://localhost:5000/api/app'; 
+const BASE_URL = 'https://difwa-backend.vercel.app'; 
 
 async function runDiagnostics() {
     console.log("🔍 Running Shop Status Diagnostics (Native Fetch)...\n");
