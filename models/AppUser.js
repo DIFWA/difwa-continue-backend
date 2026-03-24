@@ -60,7 +60,9 @@ const appUserSchema = new mongoose.Schema(
         loyaltyPoints: {
             type: Number,
             default: 0
-        }
+        },
+        resetPasswordToken: { type: String, default: null },
+        resetPasswordExpires: { type: Date, default: null },
     },
     { timestamps: true }
 );

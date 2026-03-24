@@ -1,6 +1,8 @@
 import bcrypt from "bcryptjs"
 import jwt from "jsonwebtoken"
 import User from "../models/User.js"
+import crypto from "crypto"
+import nodemailer from "nodemailer"
 import { createNotification } from "../services/notificationService.js";
 
 // Register
@@ -91,14 +93,31 @@ export const onboardUser = async (req, res) => {
         user.alternateContact = alternateContact
         user.whatsappNumber = whatsappNumber
         user.businessDetails = businessDetails
+         console.log("1")
         user.status = "under_review"
-
+        console.log("2")
         await user.save()
+        console.log("3")
 
         res.status(200).json({ message: "Onboarding details submitted", status: user.status })
     } catch (error) {
-        console.error(error)
-        res.status(500).json({ message: "Something went wrong" })
+         console.error("Onboarding error:", error)
+
+        if (error.name === "ValidationError") {
+            const fields = Object.keys(error.errors).join(", ")
+            return res.status(400).json({
+                message: `Validation failed for: ${fields}`,
+                details: error.errors
+            })
+        }
+
+        if (error.name === "CastError") {
+            return res.status(400).json({
+                message: `Invalid value for field: ${error.path}`
+            })
+        }
+
+        res.status(500).json({ message: "Something went wrong Local test" })
     }
 }
 

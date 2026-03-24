@@ -272,7 +272,7 @@ export const changePassword = async (req, res) => {
     }
 };
 
-// Forgot password (placeholder)
+// Forgot password
 export const forgotPassword = async (req, res) => {
     try {
         const { email } = req.body;
@@ -281,8 +281,40 @@ export const forgotPassword = async (req, res) => {
         const user = await AppUser.findOne({ email });
         if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
-        // TODO: generate reset token, save, and send email
-        return res.status(200).json({ success: true, message: "Password reset flow to be implemented" });
+        // Generate reset token
+        const crypto = await import("crypto");
+        const resetToken = crypto.default.randomBytes(32).toString("hex");
+        user.resetPasswordToken = resetToken;
+        user.resetPasswordExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+        await user.save();
+
+        // Send email
+        const nodemailer = await import("nodemailer");
+        const transporter = nodemailer.default.createTransport({
+            service: "gmail",
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASS,
+            },
+        });
+
+        const resetLink = `${process.env.BASE_URL}/reset-password?token=${resetToken}`;
+
+        await transporter.sendMail({
+            from: `"Difwa Water" <${process.env.EMAIL_USER}>`,
+            to: user.email,
+            subject: "Reset Your Password - Difwa Water",
+            html: `
+                <h2>Password Reset Request</h2>
+                <p>Hi ${user.fullName},</p>
+                <p>Click the button below to reset your password. This link expires in <b>15 minutes</b>.</p>
+                <a href="${resetLink}" style="background:#007bff;color:white;padding:10px 20px;border-radius:5px;text-decoration:none;display:inline-block;margin:10px 0;">Reset Password</a>
+                <p>If you didn't request this, simply ignore this email.</p>
+                <p>— Difwa Water Team</p>
+            `,
+        });
+
+        return res.status(200).json({ success: true, message: "Password reset link sent to your email" });
     } catch (error) {
         console.error("forgotPassword error:", error);
         return res.status(500).json({ success: false, message: "Server error" });

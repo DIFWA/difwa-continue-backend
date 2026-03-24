@@ -26,8 +26,9 @@ const app = express()
 
 // Middleware
 const allowedOrigins = [
-    "https://difwa-frontend.vercel.app"
-
+    "https://difwa-frontend.vercel.app",
+    "http://localhost:3000", 
+    "http://localhost:3001",
 ];
 
 app.use(cors({
