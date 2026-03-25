@@ -30,9 +30,52 @@ export const createNotification = async (recipientId, { title, message, type, re
  * Sends a push notification via FCM.
  */
 export const sendPushNotification = async (fcmToken, title, body) => {
-    console.log(`[Push Notification] To: ${fcmToken} | Title: ${title} | Body: ${body}`);
-    // Baseline stub to prevent crashes - actual FCM logic can be added if keys are provided
-    return { success: true };
+    try {
+        if (!fcmToken) {
+            console.log("No FCM token provided");
+            return { success: false };
+        }
+
+        const admin = (await import("../config/firebase.js")).default;
+
+        await admin.messaging().send({
+            notification: { title, body },
+            token: fcmToken,
+        });
+
+        console.log(`✅ Push notification sent | Title: ${title}`);
+        return { success: true };
+    } catch (error) {
+        console.error("❌ Push notification failed:", error.message);
+        return { success: false };
+    }
+};
+
+// Send to ALL users
+export const sendPushNotificationToAll = async (title, body) => {
+    try {
+        const User = (await import("../models/User.js")).default;
+        const admin = (await import("../config/firebase.js")).default;
+
+        const users = await User.find({ fcmToken: { $ne: null } });
+
+        if (users.length === 0) {
+            console.log("No users with FCM tokens");
+            return;
+        }
+
+        const tokens = users.map(u => u.fcmToken);
+
+        const response = await admin.messaging().sendEachForMulticast({
+            notification: { title, body },
+            tokens,
+        });
+
+        console.log(`✅ Sent: ${response.successCount} | ❌ Failed: ${response.failureCount}`);
+        return response;
+    } catch (error) {
+        console.error("❌ Broadcast failed:", error.message);
+    }
 };
 
 /**

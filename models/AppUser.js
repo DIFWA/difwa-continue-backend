@@ -39,9 +39,16 @@ const appUserSchema = new mongoose.Schema(
             type: Boolean,
             default: false
         },
+
+        // ✅ ADD HERE
+        fcmToken: {
+            type: String,
+            default: null
+        },
+
         addresses: [
             {
-                label: String, // Home / Work
+                label: String,
                 fullAddress: String,
                 city: String,
                 state: String,
@@ -64,7 +71,7 @@ const appUserSchema = new mongoose.Schema(
         resetPasswordToken: { type: String, default: null },
         resetPasswordExpires: { type: Date, default: null },
     },
-    { timestamps: true }
+    { timestamps: true } // ✅ options always here
 );
 
 export default mongoose.model("AppUser", appUserSchema);

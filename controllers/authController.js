@@ -63,9 +63,17 @@ export const loginUser = async (req, res) => {
         const isPasswordCorrect = await bcrypt.compare(password, user.password)
         if (!isPasswordCorrect) return res.status(400).json({ message: "Invalid credentials" })
 
-        const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "1d" })
+        const { fcmToken } = req.body  // 👈 get fcmToken from app
 
-        res.status(200).json({
+// Save fcmToken if provided
+if (fcmToken) {
+    user.fcmToken = fcmToken
+    await user.save()
+}
+
+const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "1d" })
+
+res.status(200).json({
             token,
             user: {
                 _id: user._id,
