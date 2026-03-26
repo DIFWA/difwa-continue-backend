@@ -72,10 +72,15 @@ app.use("/api/admin", adminRoutes)
 app.use("/api/upload", uploadRoutes)
 app.use("/api/retailer", retailerRoutes)
 app.use("/api/otp", otpRoutes);
-//app routes
 
+// App Routes (supporting both /api/app and /app)
 app.use("/api/app", appAuthRoutes);
+app.use("/app", appAuthRoutes);
+
+// Wallet Routes (supporting both /api/wallet and /wallet)
 app.use("/api/wallet", walletRoutes);
+app.use("/wallet", walletRoutes);
+
 app.use("/api/subscription", subscriptionRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/rider", riderRoutes);
@@ -83,6 +88,8 @@ app.use("/api/payout", payoutRoutes);
 app.use("/api/communication", communicationRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/app/orders", orderRoutes);
+app.use("/orders", orderRoutes); // Added for consistency if needed
+
 app.use("/api/payment", paymentRoutes);
 app.use("/api/cron", cronRoutes);
 app.use("/api/notifications", notificationRoutes);
