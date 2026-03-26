@@ -54,10 +54,10 @@ export const sendPushNotification = async (fcmToken, title, body) => {
 // Send to ALL users
 export const sendPushNotificationToAll = async (title, body) => {
     try {
-        const User = (await import("../models/User.js")).default;
+        const AppUser = (await import("../models/AppUser.js")).default;
         const admin = (await import("../config/firebase.js")).default;
 
-        const users = await User.find({ fcmToken: { $ne: null } });
+        const users = await AppUser.find({ fcmToken: { $ne: null } });
 
         if (users.length === 0) {
             console.log("No users with FCM tokens");

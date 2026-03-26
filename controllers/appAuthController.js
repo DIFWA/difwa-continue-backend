@@ -7,10 +7,13 @@ import { sendWelcomeEmail } from "../services/emailService.js";
 import admin from "firebase-admin";
 // Register
 export const registerUser = async (req, res) => {
+    console.log("register initiated ======>")
     try {
-        const { fullName, email, phoneNumber, password, confirmPassword } = req.body;
+        const { fullName, email, phoneNumber, password, confirmPassword, fcmToken } = req.body;
+        
+        console.log(fcmToken , " this is my fcmToken")
 
-        if (!fullName || !phoneNumber || !password || !confirmPassword) {
+        if (!fullName || !phoneNumber || !password || !confirmPassword || !fcmToken) {
             return res.status(400).json({ success: false, message: "All required fields must be filled" });
         }
 
@@ -25,6 +28,7 @@ export const registerUser = async (req, res) => {
         if (existingUser) {
             return res.status(400).json({ success: false, message: "User with this email or phone number already exists" });
         }
+       
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -33,6 +37,7 @@ export const registerUser = async (req, res) => {
             email,
             phoneNumber,
             password: hashedPassword,
+            fcmToken
         });
 
         // send welcome email (non-blocking)
@@ -70,7 +75,8 @@ export const registerUser = async (req, res) => {
                 fullName: newUser.fullName,
                 email: newUser.email,
                 phoneNumber: newUser.phoneNumber,
-                isVerified: newUser.isVerified
+                isVerified: newUser.isVerified,
+                fcmToken:newUser.fcmToken
             },
         });
     } catch (error) {
@@ -82,7 +88,7 @@ export const registerUser = async (req, res) => {
 // Login
 export const loginUser = async (req, res) => {
     try {
-        const { phoneNumber, password } = req.body;
+        const { phoneNumber, password, fcmToken } = req.body;
 
         if (!phoneNumber || !password) {
             return res.status(400).json({ success: false, message: "Phone number and password required" });
@@ -118,6 +124,16 @@ export const loginUser = async (req, res) => {
         }
 
         const token = jwt.sign({ id: user._id, role }, process.env.JWT_SECRET, { expiresIn: "7d" });
+
+        user = await AppUser.findByIdAndUpdate(
+            user._id,
+            {
+                $set: {
+                    fcmToken: fcmToken
+                }
+            },
+            { new: true }
+        )
 
         return res.status(200).json({
             success: true,
@@ -231,9 +247,9 @@ export const updateName = async (req, res) => {
         user.fullName = fullName;
         await user.save();
 
-        return res.status(200).json({ 
-            success: true, 
-            message: "Name updated successfully", 
+        return res.status(200).json({
+            success: true,
+            message: "Name updated successfully",
             data: {
                 id: user._id,
                 fullName: user.fullName,
