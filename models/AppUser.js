@@ -4,7 +4,7 @@ const appUserSchema = new mongoose.Schema(
     {
         fullName: {
             type: String,
-            required: true,
+            // required: true,
             trim: true,
         },
         email: {
@@ -28,7 +28,7 @@ const appUserSchema = new mongoose.Schema(
         },
         password: {
             type: String,
-            required: false,
+            // required: false,
         },
         firebaseUid: {
             type: String,
@@ -70,6 +70,19 @@ const appUserSchema = new mongoose.Schema(
         },
         resetPasswordToken: { type: String, default: null },
         resetPasswordExpires: { type: Date, default: null },
+
+        otp: {
+            type: String,
+            default: null
+        },
+
+        otpExpiry: {
+            type: Date,
+            default: null
+        },
+
+     
+
     },
     { timestamps: true } // ✅ options always here
 );

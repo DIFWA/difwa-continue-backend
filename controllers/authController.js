@@ -1,16 +1,15 @@
 import bcrypt from "bcryptjs"
 import jwt from "jsonwebtoken"
 import User from "../models/User.js"
-import crypto from "crypto"
-import nodemailer from "nodemailer"
 import { createNotification } from "../services/notificationService.js";
+import AppUser from "../models/AppUser.js"
 
 // Register
 export const registerUser = async (req, res) => {
     try {
         const { name, email, phone, password } = req.body
 
-        const existingUser = await ( User.findOne({ email }) || User.findOne({phone}))
+        const existingUser = await (User.findOne({ email }) || User.findOne({ phone }))
         if (existingUser) return res.status(400).json({ message: "User already exists" })
 
         const hashedPassword = await bcrypt.hash(password, 12)
@@ -65,15 +64,15 @@ export const loginUser = async (req, res) => {
 
         const { fcmToken } = req.body  // 👈 get fcmToken from app
 
-// Save fcmToken if provided
-if (fcmToken) {
-    user.fcmToken = fcmToken
-    await user.save()
-}
+        // Save fcmToken if provided
+        if (fcmToken) {
+            user.fcmToken = fcmToken
+            await user.save()
+        }
 
-const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "1d" })
+        const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "1d" })
 
-res.status(200).json({
+        res.status(200).json({
             token,
             user: {
                 _id: user._id,
@@ -101,7 +100,7 @@ export const onboardUser = async (req, res) => {
         user.alternateContact = alternateContact
         user.whatsappNumber = whatsappNumber
         user.businessDetails = businessDetails
-         console.log("1")
+        console.log("1")
         user.status = "under_review"
         console.log("2")
         await user.save()
@@ -109,7 +108,7 @@ export const onboardUser = async (req, res) => {
 
         res.status(200).json({ message: "Onboarding details submitted", status: user.status })
     } catch (error) {
-         console.error("Onboarding error:", error)
+        console.error("Onboarding error:", error)
 
         if (error.name === "ValidationError") {
             const fields = Object.keys(error.errors).join(", ")
@@ -205,3 +204,140 @@ export const updateRetailerProfile = async (req, res) => {
         res.status(500).json({ message: error.message || "Something went wrong" });
     }
 };
+
+export const sendOtp = async (req, res) => {
+    try {
+        const { phoneNumber } = req.body
+        console.log(req.body, " this is my request body")
+
+        if (!phoneNumber) {
+            return res.status(400).json({
+                message: "Phone number is required",
+                success: false
+            })
+        }
+
+        if (!/^[6-9]\d{9}$/.test(phoneNumber)) {
+            return res.status(400).json({
+                message: "Enter a valid 10 digit phone number",
+                success: false,
+            });
+        }
+
+        const existingUser = await AppUser.findOne({ phoneNumber })
+
+
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        console.log(otp, " this is my otp")
+
+        const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
+        let user;
+
+        if (existingUser) {
+            // agar user already hai but verify nahi hua
+            user = await AppUser.findByIdAndUpdate(
+                existingUser._id,
+                {
+                    $set: {
+                        otp,
+                        otpExpiry,
+                        isVerified: false,
+                    },
+                },
+                { new: true }
+            );
+        }
+
+         else {
+           
+            user = await AppUser.create({
+                phoneNumber,
+                otp,
+                otpExpiry,
+                isVerified: false,
+            });
+        }
+
+
+        return res.status(200).json({
+            message: "OTP sent successfully",
+            success: true,
+            data: otp,
+        });
+
+    } catch (error) {
+
+        console.error(error);
+        res.status(500).json({ message: error.message || "Something went wrong" });
+
+    }
+}
+
+export const verifyOtp = async (req, res) => {
+  try {
+    const { phoneNumber, otp } = req.body;
+
+    if (!phoneNumber || !otp) {
+      return res.status(400).json({
+        message: "Phone number and OTP are required",
+        success: false,
+      });
+    }
+
+    const user = await AppUser.findOne({ phoneNumber });
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+        success: false,
+      });
+    }
+
+    if (!user.otp) {
+      return res.status(400).json({
+        message: "No OTP found. Please request a new OTP",
+        success: false,
+      });
+    }
+
+    if (user.otp !== otp) {
+      return res.status(400).json({
+        message: "OTP not matched",
+        success: false,
+      });
+    }
+
+    if (new Date() > user.otpExpiry) {
+      return res.status(400).json({
+        message: "OTP expired",
+        success: false,
+      });
+    }
+
+    user.isVerified = true;
+    user.otp = null;
+    user.otpExpiry = null;
+
+    await user.save();
+
+ const token = jwt.sign({ id: user._id, role: "user" }, process.env.JWT_SECRET, { expiresIn: "5m" })
+
+    return res.status(200).json({
+      message: "OTP verified successfully",
+      success: true,
+      data:user,
+      token
+    });
+
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({
+      message: error.message || "Something went wrong",
+      success: false,
+    });
+  }
+};
+
+
+
+

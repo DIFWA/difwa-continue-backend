@@ -6,6 +6,7 @@ import Otp from "../models/Otp.js";
 import { sendWelcomeEmail } from "../services/emailService.js";
 import admin from "firebase-admin";
 // Register
+
 export const registerUser = async (req, res) => {
     console.log("register initiated ======>")
     try {
