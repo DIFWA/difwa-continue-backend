@@ -3,8 +3,11 @@ import {
     registerUser,
     loginUser,
     onboardUser,
-    getCurrentUser
+    getCurrentUser,
+    sendOtp,
+    verifyOtp
 } from "../controllers/authController.js";
+import { verify } from "crypto";
 
 const router = express.Router()
 
@@ -19,5 +22,8 @@ router.put("/onboarding", onboardUser)
 
 // Get Me (Current User)
 router.get("/me/:id", getCurrentUser)
+router.post("/send-otp" ,sendOtp)
+router.post("/verify-otp", verifyOtp)
+
 
 export default router
