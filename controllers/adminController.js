@@ -2,6 +2,9 @@ import User from "../models/User.js";
 import AppUser from "../models/AppUser.js";
 import Category from "../models/Category.js";
 import Order from "../models/Order.js";
+import Role from "../models/Role.js";
+import bcrypt from "bcryptjs";
+import { sendInviteEmail } from "../services/emailService.js";
 // --- CATEGORY CONTROLLERS ---
 export const getCategories = async (req, res) => {
     try {
@@ -353,6 +356,128 @@ export const getAllOrders = async (req, res) => {
                 limit: parseInt(limit)
             }
         });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// --- ROLE MANAGEMENT ---
+export const getRoles = async (req, res) => {
+    try {
+        const roles = await Role.find().sort({ name: 1 });
+        res.status(200).json({ success: true, data: roles });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const createRole = async (req, res) => {
+    try {
+        const { name, description, permissions, securityLevel } = req.body;
+        const role = await Role.create({ name, description, permissions, securityLevel });
+        res.status(201).json({ success: true, data: role });
+    } catch (error) {
+        if (error.code === 11000) return res.status(400).json({ success: false, message: "Role already exists" });
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const updateRole = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, description, permissions, securityLevel } = req.body;
+        const role = await Role.findByIdAndUpdate(id, { name, description, permissions, securityLevel }, { new: true });
+        if (!role) return res.status(404).json({ success: false, message: "Role not found" });
+        res.status(200).json({ success: true, data: role });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const deleteRole = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const role = await Role.findByIdAndDelete(id);
+        if (!role) return res.status(404).json({ success: false, message: "Role not found" });
+        res.status(200).json({ success: true, message: "Role deleted successfully" });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// --- ADMIN INVITATION ---
+export const inviteAdminUser = async (req, res) => {
+    try {
+        const { name, email, roleId } = req.body;
+
+        if (!name || !email || !roleId) {
+            return res.status(400).json({ success: false, message: "Name, email and roleId are required" });
+        }
+
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            return res.status(400).json({ success: false, message: "User with this email already exists" });
+        }
+
+        const role = await Role.findById(roleId);
+        if (!role) {
+            return res.status(404).json({ success: false, message: "Role not found" });
+        }
+
+        // Generate a random temporary password
+        const tempPassword = Math.random().toString(36).slice(-8);
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(tempPassword, salt);
+
+        const newUser = await User.create({
+            name,
+            email,
+            password: hashedPassword,
+            role: "admin",
+            roleId: roleId,
+            isFirstLogin: true,
+            status: "approved"
+        });
+
+        // Send invitation email
+        const emailSent = await sendInviteEmail(email, tempPassword, role.name);
+
+        res.status(201).json({
+            success: true,
+            message: emailSent ? "Invitation sent successfully" : "User created but failed to send email",
+            data: {
+                _id: newUser._id,
+                name: newUser.name,
+                email: newUser.email,
+                role: role.name
+            }
+        });
+
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const changeAdminPassword = async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+        const user = await User.findById(req.user.id);
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ success: false, message: "Incorrect current password" });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(newPassword, salt);
+        user.isFirstLogin = false;
+        await user.save();
+
+        res.status(200).json({ success: true, message: "Password updated successfully" });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

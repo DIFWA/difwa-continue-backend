@@ -11,12 +11,14 @@ import {
 } from "../controllers/productController.js";
 import { updateRetailerProfile } from "../controllers/authController.js";
 import { toggleShopStatus, finalizeOrderWeight, getRetailerDashboardStats, getRetailerCustomers, addManualCustomer, createManualOrder, settleCustomerDue, createManualSubscription, getRetailerSubscriptions, getRetailerRevenueStats, getRetailerOrders, getRetailerReviews, updateOrderItemStatus, assignRiderToOrder } from "../controllers/shopController.js";
+import { searchAnything } from "../controllers/retailerSearchController.js";
 import { getDailyPrepList } from "../services/prepService.js";
 
 const router = express.Router();
 
 // Dashboard Stats
 router.get("/dashboard-stats", protect, retailerOnly, getRetailerDashboardStats);
+router.get("/search", protect, retailerOnly, searchAnything);
 
 // Revenue Stats
 router.get("/revenue-stats", protect, retailerOnly, getRetailerRevenueStats);

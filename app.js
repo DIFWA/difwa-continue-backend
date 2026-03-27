@@ -29,20 +29,33 @@ const allowedOrigins = [
     "https://difwa-frontend.vercel.app",
     "http://localhost:3000",
     "http://localhost:3001",
-    "http://localhost:5000"
+    "http://localhost:3002",
+    "http://localhost:5000",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+    "http://127.0.0.1:54321"
 ];
 
 app.use(cors({
     origin: function (origin, callback) {
-        if (!origin || allowedOrigins.indexOf(origin) !== -1 || origin.includes("ngrok")) {
+        // Allow requests with no origin (like mobile apps or curl)
+        if (!origin) return callback(null, true);
+
+        const isAllowed = allowedOrigins.indexOf(origin) !== -1 ||
+            origin.includes("ngrok") ||
+            origin.includes("localhost") ||
+            origin.includes("127.0.0.1");
+
+        if (isAllowed) {
             callback(null, true);
         } else {
+            console.log("CORS Rejected Origin:", origin);
             callback(new Error("Not allowed by CORS"));
         }
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "ngrok-skip-browser-warning"]
+    allowedHeaders: ["Content-Type", "Authorization", "ngrok-skip-browser-warning", "Accept", "X-Requested-With", "Origin"]
 }));
 
 app.use(express.json())

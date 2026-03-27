@@ -69,6 +69,15 @@ const userSchema = new mongoose.Schema({
         resetPasswordExpires: { type: Date, default: null },
         otp: { type: String, default: null },
         otpExpiry: { type: Date, default: null },
+    },
+    roleId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Role",
+        default: null
+    },
+    isFirstLogin: {
+        type: Boolean,
+        default: true
     }
 }, { timestamps: true })
 

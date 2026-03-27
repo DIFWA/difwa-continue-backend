@@ -45,26 +45,14 @@ export const loginUser = async (req, res) => {
     try {
         const { email, password } = req.body
 
-        // Special handling for test accounts
-        if (email === "admin@test.com" && password === "123456") {
-            const token = jwt.sign({ id: "admin-test-id", role: "admin" }, process.env.JWT_SECRET, { expiresIn: "11d" })
-            return res.status(200).json({ token, user: { id: "admin-test-id", name: "Admin Test", email, role: "admin", status: "approved" } })
-        }
-
-        if (email === "retailer@test.com" && password === "123456") {
-            const token = jwt.sign({ id: "retailer-test-id", role: "retailer" }, process.env.JWT_SECRET, { expiresIn: "1d" })
-            return res.status(200).json({ token, user: { id: "retailer-test-id", name: "Retailer Test", email, role: "retailer", status: "approved" } })
-        }
-
-        const user = await User.findOne({ email })
+        const user = await User.findOne({ email }).populate("roleId")
         if (!user) return res.status(404).json({ message: "User doesn't exist" })
 
         const isPasswordCorrect = await bcrypt.compare(password, user.password)
         if (!isPasswordCorrect) return res.status(400).json({ message: "Invalid credentials" })
 
-        const { fcmToken } = req.body  // 👈 get fcmToken from app
+        const { fcmToken } = req.body
 
-        // Save fcmToken if provided
         if (fcmToken) {
             user.fcmToken = fcmToken
             await user.save()
@@ -80,7 +68,9 @@ export const loginUser = async (req, res) => {
                 email,
                 status: user.status,
                 role: user.role,
-                isShopActive: user.isShopActive
+                isShopActive: user.isShopActive,
+                roleId: user.roleId,
+                isFirstLogin: user.isFirstLogin
             }
         })
     } catch (error) {
@@ -131,36 +121,7 @@ export const onboardUser = async (req, res) => {
 // Get Me (Current User)
 export const getCurrentUser = async (req, res) => {
     try {
-        // Special handling for test accounts
-        if (req.params.id === "admin-test-id") {
-            return res.status(200).json({
-                _id: "admin-test-id",
-                name: "Admin Test",
-                email: "admin@test.com",
-                role: "admin",
-                status: "approved"
-            })
-        }
-        if (req.params.id === "retailer-test-id") {
-            return res.status(200).json({
-                _id: "retailer-test-id",
-                name: "Retailer Test",
-                email: "retailer@test.com",
-                role: "retailer",
-                status: "approved",
-                businessDetails: {
-                    businessName: "Test Retailer Shop",
-                    ownerName: "Retailer Test Owner",
-                    businessType: "Retailer",
-                    location: {
-                        city: "Test City",
-                        hub: "Main Hub"
-                    }
-                }
-            })
-        }
-
-        const user = await User.findById(req.params.id)
+        const user = await User.findById(req.params.id).populate("roleId")
         if (!user) return res.status(404).json({ message: "User not found" })
 
         res.status(200).json(user)

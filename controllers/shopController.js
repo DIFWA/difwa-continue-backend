@@ -221,6 +221,81 @@ export const getRetailerDashboardStats = async (req, res) => {
             });
         }
 
+        // --- FETCH RECENT ACTIVITIES ---
+        const recentActivities = [];
+
+        // 1. New Orders (Last 5)
+        const recentOrders = await Order.find({ "items.retailer": retailerId })
+            .select("orderId user createdAt items status statusHistory")
+            .populate("user", "fullName")
+            .sort({ createdAt: -1 })
+            .limit(10);
+
+        recentOrders.forEach(order => {
+            // New Order Activity
+            recentActivities.push({
+                id: `new_${order._id}`,
+                type: 'order_new',
+                title: 'New Order Received',
+                message: `Order #${order.orderId.slice(-6).toUpperCase()} from ${order.user?.fullName || 'Customer'}`,
+                timestamp: order.createdAt,
+                status: 'info'
+            });
+
+            // Specific Status Changes (Delivered, Cancelled, Shipped)
+            order.statusHistory.forEach(h => {
+                if (['Delivered', 'Cancelled', 'Shipped', 'Out for Delivery'].includes(h.status)) {
+                    recentActivities.push({
+                        id: `status_${order._id}_${h.status}`,
+                        type: 'order_status',
+                        title: `Order ${h.status}`,
+                        message: `Order #${order.orderId.slice(-6).toUpperCase()} is now ${h.status}`,
+                        timestamp: h.timestamp,
+                        status: h.status === 'Delivered' ? 'success' : (h.status === 'Cancelled' ? 'error' : 'warning')
+                    });
+                }
+            });
+        });
+
+        // 2. Low Stock Alerts
+        const lowStockProducts = await Product.find({ 
+            retailer: retailerId, 
+            stock: { $lt: 5 }, 
+            status: "Published" 
+        }).limit(5);
+
+        lowStockProducts.forEach(product => {
+            recentActivities.push({
+                id: `stock_${product._id}`,
+                type: 'low_stock',
+                title: 'Low Stock Alert',
+                message: `${product.name} has only ${product.stock} units left!`,
+                timestamp: product.updatedAt,
+                status: 'warning'
+            });
+        });
+
+        // 3. New Customers (Joined via this retailer)
+        const recentCustomers = await AppUser.find({ addedByRetailer: retailerId })
+            .sort({ createdAt: -1 })
+            .limit(5);
+
+        recentCustomers.forEach(cust => {
+            recentActivities.push({
+                id: `cust_${cust._id}`,
+                type: 'customer_new',
+                title: 'New Customer Joined',
+                message: `${cust.fullName || 'A new customer'} joined your shop directory.`,
+                timestamp: cust.createdAt,
+                status: 'success'
+            });
+        });
+
+        // Sort everything by timestamp and limit to 10
+        const finalActivities = recentActivities
+            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+            .slice(0, 10);
+
         res.status(200).json({
             success: true,
             data: {
@@ -232,7 +307,8 @@ export const getRetailerDashboardStats = async (req, res) => {
                     totalCustomers,
                     isShopActive: (await User.findById(retailerId)).isShopActive
                 },
-                chartData
+                chartData,
+                recentActivities: finalActivities
             }
         });
 

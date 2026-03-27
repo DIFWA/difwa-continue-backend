@@ -8,7 +8,13 @@ import {
     updateCategory,
     deleteCategory,
     getDashboardStats,
-    getAllOrders
+    getAllOrders,
+    getRoles,
+    createRole,
+    updateRole,
+    deleteRole,
+    inviteAdminUser,
+    changeAdminPassword
 } from "../controllers/adminController.js";
 import {
     getSubscriptionPlans,
@@ -48,5 +54,16 @@ router.delete("/subscriptions/:id", deleteSubscriptionPlan)
 
 // Order Management
 router.get("/orders", protect, adminOnly, getAllOrders)
+
+// Role Management
+router.get("/roles", protect, adminOnly, getRoles)
+router.post("/roles", protect, adminOnly, createRole)
+router.put("/roles/:id", protect, adminOnly, updateRole)
+router.delete("/roles/:id", protect, adminOnly, deleteRole)
+
+router.post("/invite", protect, adminOnly, inviteAdminUser)
+
+// Change Password
+router.put("/change-password", protect, changeAdminPassword)
 
 export default router
