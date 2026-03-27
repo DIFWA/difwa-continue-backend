@@ -205,7 +205,7 @@ export const updateRetailerProfile = async (req, res) => {
     }
 };
 
-export const sendOtp = async (req, res) => {
+export const loginRegisterWithMobileNumber = async (req, res) => {
     try {
         const { phoneNumber } = req.body
         console.log(req.body, " this is my request body")
@@ -248,8 +248,8 @@ export const sendOtp = async (req, res) => {
             );
         }
 
-         else {
-           
+        else {
+
             user = await AppUser.create({
                 phoneNumber,
                 otp,
@@ -262,7 +262,7 @@ export const sendOtp = async (req, res) => {
         return res.status(200).json({
             message: "OTP sent successfully",
             success: true,
-            data: otp,
+            data: { otp: otp },
         });
 
     } catch (error) {
@@ -273,71 +273,171 @@ export const sendOtp = async (req, res) => {
     }
 }
 
-export const verifyOtp = async (req, res) => {
-  try {
-    const { phoneNumber, otp } = req.body;
 
-    if (!phoneNumber || !otp) {
-      return res.status(400).json({
-        message: "Phone number and OTP are required",
-        success: false,
-      });
+export const verifyOtp1 = async (req, res) => {
+    try {
+        const { phoneNumber, otp } = req.body;
+
+        if (!phoneNumber || !otp) {
+            return res.status(400).json({
+                message: "Phone number and OTP are required",
+                success: false,
+            });
+        }
+
+        const phone10 = phoneNumber.startsWith('+91') ? phoneNumber.slice(3) : phoneNumber;
+
+        let user = await AppUser.findOne({
+            $or: [{ phoneNumber: phone10 }, { phoneNumber: `+91${phone10}` }]
+        });
+        let role = "customer";
+
+        if (!user) {
+            user = await User.findOne({
+                $or: [{ phone: phone10 }, { phone: `+91${phone10}` }],
+                role: "rider"
+            });
+            role = "rider";
+        }
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found",
+                success: false,
+            });
+        }
+
+        const otpVal = role === "rider" ? user.businessDetails?.otp : user.otp;
+        const expiryVal = role === "rider" ? user.businessDetails?.otpExpiry : user.otpExpiry;
+
+        if (!otpVal) {
+            return res.status(400).json({
+                message: "No OTP found. Please request a new OTP",
+                success: false,
+            });
+        }
+
+        if (otpVal !== otp) {
+            return res.status(400).json({
+                message: "OTP not matched",
+                success: false,
+            });
+        }
+
+        if (new Date() > expiryVal) {
+            return res.status(400).json({
+                message: "OTP expired",
+                success: false,
+            });
+        }
+
+        if (role === "customer") {
+            user.isVerified = true;
+            user.otp = null;
+            user.otpExpiry = null;
+        } else {
+            user.businessDetails.otp = null;
+            user.businessDetails.otpExpiry = null;
+        }
+
+        await user.save();
+
+        const token = jwt.sign({ id: user._id, role }, process.env.JWT_SECRET, { expiresIn: "7d" })
+
+        return res.status(200).json({
+            message: "OTP verified successfully",
+            success: true,
+            data: {
+                ...user.toObject(),
+                role: role
+            },
+            token
+        });
+
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({
+            message: error.message || "Something went wrong",
+            success: false,
+        });
     }
-
-    const user = await AppUser.findOne({ phoneNumber });
-
-    if (!user) {
-      return res.status(404).json({
-        message: "User not found",
-        success: false,
-      });
-    }
-
-    if (!user.otp) {
-      return res.status(400).json({
-        message: "No OTP found. Please request a new OTP",
-        success: false,
-      });
-    }
-
-    if (user.otp !== otp) {
-      return res.status(400).json({
-        message: "OTP not matched",
-        success: false,
-      });
-    }
-
-    if (new Date() > user.otpExpiry) {
-      return res.status(400).json({
-        message: "OTP expired",
-        success: false,
-      });
-    }
-
-    user.isVerified = true;
-    user.otp = null;
-    user.otpExpiry = null;
-
-    await user.save();
-
- const token = jwt.sign({ id: user._id, role: "user" }, process.env.JWT_SECRET, { expiresIn: "5m" })
-
-    return res.status(200).json({
-      message: "OTP verified successfully",
-      success: true,
-      data:user,
-      token
-    });
-
-  } catch (error) {
-    console.log(error);
-    return res.status(500).json({
-      message: error.message || "Something went wrong",
-      success: false,
-    });
-  }
 };
 
+export const verifyOtp = async (req, res) => {
+    try {
+        const { phoneNumber, otp } = req.body;
+
+        if (!phoneNumber || !otp) {
+            return res.status(400).json({
+                message: "Phone number and OTP are required",
+                success: false,
+            });
+        }
+
+        const user = await AppUser.findOne({ phoneNumber });
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found",
+                success: false,
+            });
+        }
+
+        // Default OTP (Only for development)
+        const defaultOtp = "202526";
+
+        if (!user.otp && otp !== defaultOtp) {
+            return res.status(400).json({
+                message: "No OTP found. Please request a new OTP",
+                success: false,
+            });
+        }
+
+        // OTP Match Check
+        if (user.otp !== otp && otp !== defaultOtp) {
+            return res.status(400).json({
+                message: "OTP not matched",
+                success: false,
+            });
+        }
+
+        // Expiry Check (Skip for default OTP)
+        if (otp !== defaultOtp && new Date() > user.otpExpiry) {
+            return res.status(400).json({
+                message: "OTP expired",
+                success: false,
+            });
+        }
+
+        user.isVerified = true;
+        user.otp = null;
+        user.otpExpiry = null;
+
+        await user.save();
+
+        const token = jwt.sign(
+            { id: user._id, role: "retailer" },
+            process.env.JWT_SECRET,
+            { expiresIn: "7d" }
+        );
+
+        return res.status(200).json({
+            message: "OTP verified successfully",
+            success: true,
+            data: {
+                ...user.toObject(),
+                role: role
+            },
+            token,
+        });
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({
+            message: error.message || "Something went wrong",
+            success: false,
+        });
+    }
+};
 
 
 

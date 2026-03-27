@@ -80,6 +80,21 @@ const appUserSchema = new mongoose.Schema(
             type: Date,
             default: null
         },
+        addedByRetailer: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            default: null
+        },
+        isManual: {
+            type: Boolean,
+            default: false
+        },
+        retailerBalances: [
+            {
+                retailer: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+                balance: { type: Number, default: 0 }
+            }
+        ]
 
      
 

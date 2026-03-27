@@ -1,8 +1,11 @@
 import User from "../models/User.js";
 import Product from "../models/Product.js";
 import Order from "../models/Order.js";
+import AppUser from "../models/AppUser.js";
+import Subscription from "../models/Subscription.js";
 import { adjustBalance } from "../services/walletService.js";
 import { emitOrderUpdate, emitShopStatusUpdate } from "../services/socketService.js";
+import { createNotification } from "../services/notificationService.js";
 
 // Get all approved shops (retailers)
 export const getPublicShops = async (req, res) => {
@@ -304,7 +307,7 @@ export const getRetailerCustomers = async (req, res) => {
         const retailerId = req.user._id;
 
         // 1. Get all orders involving this retailer and populate customer info
-        const orders = await Order.find({ "items.retailer": retailerId }).populate("user", "fullName email phoneNumber profilePicture");
+        const orders = await Order.find({ "items.retailer": retailerId }).populate("user", "fullName email phoneNumber profilePicture isManual addresses");
 
         const customerMap = new Map();
 
@@ -352,8 +355,25 @@ export const getRetailerCustomers = async (req, res) => {
             }
         });
 
+        // 2. Also get manually added customers who might NOT have orders yet
+        const manualCustomers = await AppUser.find({ addedByRetailer: retailerId });
+        manualCustomers.forEach(user => {
+            const customerId = user._id.toString();
+            if (!customerMap.has(customerId)) {
+                customerMap.set(customerId, {
+                    user: user,
+                    orderCount: 0,
+                    totalSpend: 0,
+                    orderIds: [],
+                    firstOrderDate: user.createdAt,
+                    lastOrderDate: user.createdAt
+                });
+            }
+        });
+
         const myCustomersArray = Array.from(customerMap.values()).map(({ user, orderCount, totalSpend, orderIds, firstOrderDate, lastOrderDate }) => {
             let status = "Active";
+            if (user.isManual) status = "Manual";
             if (orderCount > 3 || totalSpend > 2000) status = "VIP";
             else if (new Date(firstOrderDate) >= thirtyDaysAgo) status = "New";
 
@@ -364,6 +384,10 @@ export const getRetailerCustomers = async (req, res) => {
                 repeatCustomersCount++;
             }
 
+            // Get customer balance for THIS retailer
+            const balanceEntry = user.retailerBalances?.find(b => b.retailer?.toString() === retailerId.toString());
+            const balance = balanceEntry ? balanceEntry.balance : 0;
+
             return {
                 id: user._id,
                 name: user.fullName || "Customer",
@@ -372,8 +396,11 @@ export const getRetailerCustomers = async (req, res) => {
                 orderCount,
                 orderIds,
                 spend: totalSpend.toFixed(2),
+                balance: balance.toFixed(2),
                 status,
-                image: user.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${(user.fullName || 'User').replace(/\s+/g, '')}`
+                image: user.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${(user.fullName || 'User').replace(/\s+/g, '')}`,
+                isManual: user.isManual || false,
+                addresses: user.addresses || []
             };
         });
 
@@ -426,6 +453,140 @@ export const getRetailerCustomers = async (req, res) => {
             }
         });
 
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const addManualCustomer = async (req, res) => {
+    try {
+        const { fullName, phoneNumber } = req.body;
+        const retailerId = req.user._id;
+
+        if (!fullName || !phoneNumber) {
+            return res.status(400).json({ success: false, message: "Name and Phone number are required" });
+        }
+
+        let user = await AppUser.findOne({ phoneNumber });
+
+        if (user) {
+            // Already exists - just ensure linked to this retailer if not already
+            if (!user.addedByRetailer) {
+                user.addedByRetailer = retailerId;
+                await user.save();
+            }
+            return res.status(200).json({ 
+                success: true, 
+                message: "Customer linked successfully", 
+                data: user 
+            });
+        }
+
+        user = await AppUser.create({
+            fullName,
+            phoneNumber,
+            addedByRetailer: retailerId,
+            isManual: true,
+            isVerified: false
+        });
+
+        res.status(201).json({ success: true, data: user });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const createManualOrder = async (req, res) => {
+    try {
+        const retailerId = req.user._id;
+        const { customerId, items } = req.body;
+
+        if (!customerId || !items || items.length === 0) {
+            return res.status(400).json({ success: false, message: "Customer ID and items are required" });
+        }
+
+        // 1. Validate Customer
+        const customer = await AppUser.findById(customerId);
+        if (!customer) return res.status(404).json({ success: false, message: "Customer not found" });
+
+        // 2. Validate Products and Calculate Total
+        let totalAmount = 0;
+        const orderItems = [];
+
+        for (const item of items) {
+            const product = await Product.findById(item.productId);
+            if (!product) continue;
+
+            totalAmount += product.price * item.quantity;
+            orderItems.push({
+                product: product._id,
+                retailer: retailerId,
+                quantity: item.quantity,
+                price: product.price,
+                status: "Accepted" // Manual orders are usually already accepted by the retailer
+            });
+
+            // Update Stock
+            product.stock -= item.quantity;
+            await product.save();
+        }
+
+        // 3. Create Order
+        const { paymentMethod = "Cash", paymentStatus = "Pending", deliveryAddress } = req.body;
+        
+        // SYNC ADDRESS to Customer Profile (so it shows in mobile app)
+        if (deliveryAddress && typeof deliveryAddress === 'string') {
+            const addressExists = customer.addresses.some(a => a.fullAddress === deliveryAddress);
+            if (!addressExists) {
+                customer.addresses.push({
+                    label: "Added by Store",
+                    fullAddress: deliveryAddress,
+                    isDefault: customer.addresses.length === 0
+                });
+                // Note: We save customer below in the balance section or here
+            }
+        }
+
+        const orderId = `ORD-MAN-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+        const order = await Order.create({
+            orderId,
+            user: customerId,
+            items: orderItems,
+            totalAmount,
+            deliveryAddress: typeof deliveryAddress === 'string' ? { address: deliveryAddress } : (deliveryAddress || { address: "Manual Entry" }),
+            paymentMethod,
+            paymentStatus,
+            status: "Accepted",
+            isManual: true,
+            statusHistory: [{
+                status: "Accepted",
+                changedBy: retailerId,
+                role: 'retailer',
+                timestamp: new Date()
+            }]
+        });
+
+        // 3.1 Handle Customer Balance and Save Address Sync
+        if (paymentStatus === "Due") {
+            const balanceIndex = customer.retailerBalances.findIndex(
+                b => b.retailer.toString() === retailerId.toString()
+            );
+
+            if (balanceIndex !== -1) {
+                customer.retailerBalances[balanceIndex].balance += totalAmount;
+            } else {
+                customer.retailerBalances.push({
+                    retailer: retailerId,
+                    balance: totalAmount
+                });
+            }
+        }
+        await customer.save(); // Saves both balance and new address
+
+        // 4. Emit Socket
+        await emitOrderUpdate(orderId, "Accepted", order, retailerId, customerId);
+
+        res.status(201).json({ success: true, data: order });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -674,6 +835,105 @@ export const assignRiderToOrder = async (req, res) => {
         await emitOrderUpdate(orderId, "Rider Assigned", { orderId, riderId, order }, retailerId, null, riderId);
 
         res.status(200).json({ success: true, message: "Rider assigned successfully", data: order });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const settleCustomerDue = async (req, res) => {
+    try {
+        const retailerId = req.user._id;
+        const { customerId, amount } = req.body;
+
+        if (!customerId || !amount || amount <= 0) {
+            return res.status(400).json({ success: false, message: "Customer ID and valid amount are required" });
+        }
+
+        const customer = await AppUser.findById(customerId);
+        if (!customer) return res.status(404).json({ success: false, message: "Customer not found" });
+
+        const balanceIndex = customer.retailerBalances.findIndex(
+            b => b.retailer.toString() === retailerId.toString()
+        );
+
+        if (balanceIndex === -1 || customer.retailerBalances[balanceIndex].balance < amount) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "Settlement amount cannot exceed current balance" 
+            });
+        }
+
+        customer.retailerBalances[balanceIndex].balance -= amount;
+        await customer.save();
+
+        res.status(200).json({ 
+            success: true, 
+            message: "Balance settled successfully", 
+            newBalance: customer.retailerBalances[balanceIndex].balance 
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const createManualSubscription = async (req, res) => {
+    try {
+        const retailerId = req.user._id;
+        const { customerId, productId, frequency, customDays, quantity, startDate, endDate, deliveryAddress } = req.body;
+
+        if (!customerId || !productId || !frequency || !quantity) {
+            return res.status(400).json({ success: false, message: "Missing required fields" });
+        }
+
+        const customer = await AppUser.findById(customerId);
+        if (!customer) return res.status(404).json({ success: false, message: "Customer not found" });
+
+        // SYNC ADDRESS to Customer Profile
+        if (deliveryAddress && typeof deliveryAddress === 'string') {
+            const addressExists = customer.addresses.some(a => a.fullAddress === deliveryAddress);
+            if (!addressExists) {
+                customer.addresses.push({
+                    label: "Added by Store",
+                    fullAddress: deliveryAddress,
+                    isDefault: customer.addresses.length === 0
+                });
+                await customer.save();
+            }
+        }
+
+        const subscription = await Subscription.create({
+            user: customerId,
+            product: productId,
+            retailer: retailerId,
+            frequency,
+            customDays,
+            quantity,
+            startDate: startDate || new Date(),
+            endDate,
+            isManual: true,
+            deliveryAddress
+        });
+
+        res.status(201).json({ success: true, data: subscription });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const getRetailerSubscriptions = async (req, res) => {
+    try {
+        const retailerId = req.user._id;
+        const { customerId } = req.query;
+
+        const query = { retailer: retailerId };
+        if (customerId) query.user = customerId;
+
+        const subscriptions = await Subscription.find(query)
+            .populate('user', 'fullName phoneNumber email')
+            .populate('product', 'name price images')
+            .sort({ createdAt: -1 });
+
+        res.status(200).json({ success: true, data: subscriptions });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

@@ -4,8 +4,9 @@ import {
     loginUser,
     onboardUser,
     getCurrentUser,
-    sendOtp,
-    verifyOtp
+    verifyOtp,
+    loginRegisterWithMobileNumber,
+    verifyOtp1
 } from "../controllers/authController.js";
 import { verify } from "crypto";
 
@@ -22,8 +23,11 @@ router.put("/onboarding", onboardUser)
 
 // Get Me (Current User)
 router.get("/me/:id", getCurrentUser)
-router.post("/send-otp" ,sendOtp)
-router.post("/verify-otp", verifyOtp)
+
+// for. mobile register 
+router.post("/send-otp-for-mobile-login-register", loginRegisterWithMobileNumber)
+router.post("/verify-otp2", verifyOtp1
+)
 
 
 export default router

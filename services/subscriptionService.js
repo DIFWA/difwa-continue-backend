@@ -4,6 +4,7 @@ import { emitOrderUpdate } from "./socketService.js";
 import Product from "../models/Product.js";
 import { adjustBalance } from "./walletService.js";
 import mongoose from "mongoose";
+import AppUser from "../models/AppUser.js";
 
 export const createSubscription = async (userId, subscriptionData) => {
     // Basic validation: Check if product exists and user has min balance
@@ -26,7 +27,7 @@ export const generateDailyOrders = async (targetDate = new Date()) => {
     // 1. Find active subscriptions
     const subscriptions = await Subscription.find({ status: "Active" }).populate("product");
 
-    const stats = { created: 0, failed: 0, skipped: 0 };
+    const stats = { created: 0, failed: 0, skipped: 0, errors: [] };
 
     for (const sub of subscriptions) {
         if (sub.status === "Paused") {
@@ -96,25 +97,57 @@ export const generateDailyOrders = async (targetDate = new Date()) => {
                 continue;
             }
 
-            if (product.dailyCapacity && todayOrdersCount >= product.dailyCapacity) {
-                console.log(`[SKIP] Capacity Reached: Product ${product.name}`);
-                stats.skipped++;
-                continue;
-            }
-
-            // 5. Create Order & Debit Wallet
+            // 5. Handle Payment & Create Order
             const amount = sub.product.price * sub.quantity;
+            let paymentStatus = "Paid";
+            let paymentMethod = "Wallet";
 
-            // Atomically debit wallet and create order
-            await adjustBalance(
-                sub.user,
-                "appUser",
-                amount,
-                "Debit",
-                `Subscription Delivery: ${sub.product.name}`,
-                "Wallet",
-                sub._id
-            );
+            if (sub.isManual) {
+                // For manual subscriptions, update the customer's due balance with this retailer
+                const customer = await AppUser.findById(sub.user);
+                if (!customer) {
+                    console.log(`[SKIP] Missing User for Manual Sub: ${sub._id}`);
+                    stats.skipped++;
+                    continue;
+                }
+
+                const balanceIndex = customer.retailerBalances.findIndex(
+                    b => b.retailer.toString() === sub.retailer.toString()
+                );
+
+                if (balanceIndex !== -1) {
+                    customer.retailerBalances[balanceIndex].balance += amount;
+                } else {
+                    customer.retailerBalances.push({
+                        retailer: sub.retailer,
+                        balance: amount
+                    });
+                }
+                await customer.save();
+                
+                paymentStatus = "Due";
+                paymentMethod = "Cash";
+            } else {
+                // Atomically debit wallet for standard subscriptions
+                try {
+                    await adjustBalance(
+                        sub.user,
+                        "appUser",
+                        amount,
+                        "Debit",
+                        `Subscription Delivery: ${sub.product.name}`,
+                        "Wallet",
+                        sub._id
+                    );
+                } catch (balanceError) {
+                    if (balanceError.message === "User not found") {
+                        console.log(`[SKIP] Missing User for Standard Sub: ${sub._id}`);
+                        stats.skipped++;
+                        continue;
+                    }
+                    throw balanceError; // Re-throw other errors (like Insufficient Balance)
+                }
+            }
 
             const orderId = `SUB-${Date.now()}-${sub._id.toString().slice(-4)}`;
             const newOrder = await Order.create({
@@ -125,31 +158,32 @@ export const generateDailyOrders = async (targetDate = new Date()) => {
                     retailer: sub.retailer,
                     quantity: sub.quantity,
                     price: sub.product.price,
-                    status: "Accepted" // Subscriptions are pre-accepted by the system
+                    status: "Accepted"
                 }],
                 totalAmount: amount,
                 orderType: "Subscription",
                 subscriptionId: sub._id,
-                paymentStatus: "Paid",
-                paymentMethod: "Wallet"
+                paymentStatus,
+                paymentMethod,
+                isManual: sub.isManual || false,
+                deliveryAddress: sub.deliveryAddress ? { address: sub.deliveryAddress } : undefined
             });
 
             sub.lastGeneratedDate = targetDate;
 
-            // 6. Referral Reward Check (e.g., after 7 successful orders)
-            const subOrderCount = await Order.countDocuments({ subscriptionId: sub._id, paymentStatus: "Paid" });
-            if (subOrderCount === 7) {
-                import("./referralService.js").then(module => module.rewardReferral(sub.user));
+            // 6. Referral & Loyalty (Only for paid standard subscriptions)
+            if (paymentStatus === "Paid") {
+                const subOrderCount = await Order.countDocuments({ subscriptionId: sub._id, paymentStatus: "Paid" });
+                if (subOrderCount === 7) {
+                    import("./referralService.js").then(module => module.rewardReferral(sub.user));
+                }
+                import("./loyaltyService.js").then(module => module.awardLoyaltyPoints(sub.user, amount));
             }
-
-            // 7. Loyalty Points
-            import("./loyaltyService.js").then(module => module.awardLoyaltyPoints(sub.user, amount));
 
             await sub.save();
 
             // 8. Socket Notification
             if (newOrder && newOrder.items && newOrder.items.length > 0) {
-                // Include product name and subscription details in the data for better real-time display
                 const emitData = {
                     ...newOrder.toObject(),
                     product: `${sub.quantity}x ${sub.product.name}`,
@@ -157,7 +191,7 @@ export const generateDailyOrders = async (targetDate = new Date()) => {
                         frequency: sub.frequency,
                         customDays: sub.customDays
                     },
-                    createdAt: newOrder.createdAt // Passing raw date for FE formatting
+                    createdAt: newOrder.createdAt
                 };
                 await emitOrderUpdate(newOrder.orderId, "Accepted", emitData, newOrder.items[0].retailer, sub.user);
             }
@@ -165,7 +199,7 @@ export const generateDailyOrders = async (targetDate = new Date()) => {
             stats.created++;
 
         } catch (error) {
-            console.error(`Failed to generate order for subscription ${sub._id}:`, error.message);
+            console.error(`[CRON ERROR] Sub ${sub._id}:`, error.message);
             stats.failed++;
         }
     }

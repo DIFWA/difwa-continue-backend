@@ -5,14 +5,174 @@ import AppUser from "../models/AppUser.js";
 import Otp from "../models/Otp.js";
 import { sendWelcomeEmail } from "../services/emailService.js";
 import admin from "firebase-admin";
+import User from "../models/User.js";
 // Register
+
+
+
+export const sendOtp = async (req, res) => {
+    try {
+        const { phoneNumber } = req.body
+        console.log(req.body, " this is my request body")
+
+        // Normalize: Strip +91 if present
+        const phone10 = phoneNumber.startsWith('+91') ? phoneNumber.slice(3) : phoneNumber;
+
+        if (!/^[6-9]\d{9}$/.test(phone10)) {
+            return res.status(400).json({
+                message: "Enter a valid 10 digit phone number",
+                success: false,
+            });
+        }
+
+        const existingUser = await AppUser.findOne({
+            $or: [{ phoneNumber: phone10 }, { phoneNumber: `+91${phone10}` }]
+        })
+        const existingRider = !existingUser ? await User.findOne({
+            $or: [{ phone: phone10 }, { phone: `+91${phone10}` }],
+            role: "rider"
+        }) : null;
+
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        console.log(otp, " this is my otp")
+
+        const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
+        let user;
+
+        if (existingUser) {
+            // agar user already hai but verify nahi hua
+            user = await AppUser.findByIdAndUpdate(
+                existingUser._id,
+                { $set: { otp, otpExpiry, isVerified: false } },
+                { new: true }
+            );
+        } else if (existingRider) {
+            user = await User.findByIdAndUpdate(
+                existingRider._id,
+                { $set: { "businessDetails.otp": otp, "businessDetails.otpExpiry": otpExpiry } },
+                { new: true }
+            );
+        } else {
+
+            user = await AppUser.create({
+                phoneNumber,
+                otp,
+                otpExpiry,
+                isVerified: false,
+            });
+        }
+
+
+        return res.status(200).json({
+            message: "OTP sent successfully",
+            success: true,
+            data: { otp: otp },
+        });
+
+    } catch (error) {
+
+        console.error(error);
+        res.status(500).json({ message: error.message || "Something went wrong" });
+
+    }
+}
+
+export const verifyOtp = async (req, res) => {
+    try {
+        const { phoneNumber, otp } = req.body;
+
+        if (!phoneNumber || !otp) {
+            return res.status(400).json({
+                message: "Phone number and OTP are required",
+                success: false,
+            });
+        }
+
+        const phone10 = phoneNumber.startsWith('+91') ? phoneNumber.slice(3) : phoneNumber;
+
+        let user = await AppUser.findOne({
+            $or: [{ phoneNumber: phone10 }, { phoneNumber: `+91${phone10}` }]
+        });
+        let role = "customer";
+
+        if (!user) {
+            user = await User.findOne({
+                $or: [{ phone: phone10 }, { phone: `+91${phone10}` }],
+                role: "rider"
+            });
+            role = "rider";
+        }
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found",
+                success: false,
+            });
+        }
+
+        const otpVal = role === "rider" ? user.businessDetails?.otp : user.otp;
+        const expiryVal = role === "rider" ? user.businessDetails?.otpExpiry : user.otpExpiry;
+
+        if (!otpVal) {
+            return res.status(400).json({
+                message: "No OTP found. Please request a new OTP",
+                success: false,
+            });
+        }
+
+        if (otpVal !== otp) {
+            return res.status(400).json({
+                message: "OTP not matched",
+                success: false,
+            });
+        }
+
+        if (new Date() > expiryVal) {
+            return res.status(400).json({
+                message: "OTP expired",
+                success: false,
+            });
+        }
+
+        if (role === "customer") {
+            user.isVerified = true;
+            user.otp = null;
+            user.otpExpiry = null;
+        } else {
+            user.businessDetails.otp = null;
+            user.businessDetails.otpExpiry = null;
+        }
+
+        await user.save();
+
+        const token = jwt.sign({ id: user._id, role }, process.env.JWT_SECRET, { expiresIn: "7d" })
+
+        return res.status(200).json({
+            message: "OTP verified successfully",
+            success: true,
+            data: {
+                ...user.toObject(),
+                role: role
+            },
+            token
+        });
+
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({
+            message: error.message || "Something went wrong",
+            success: false,
+        });
+    }
+};
+
 
 export const registerUser = async (req, res) => {
     console.log("register initiated ======>")
     try {
         const { fullName, email, phoneNumber, password, confirmPassword, fcmToken } = req.body;
-        
-        console.log(fcmToken , " this is my fcmToken")
+
+        console.log(fcmToken, " this is my fcmToken")
 
         if (!fullName || !phoneNumber || !password || !confirmPassword || !fcmToken) {
             return res.status(400).json({ success: false, message: "All required fields must be filled" });
@@ -29,7 +189,7 @@ export const registerUser = async (req, res) => {
         if (existingUser) {
             return res.status(400).json({ success: false, message: "User with this email or phone number already exists" });
         }
-       
+
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -77,7 +237,7 @@ export const registerUser = async (req, res) => {
                 email: newUser.email,
                 phoneNumber: newUser.phoneNumber,
                 isVerified: newUser.isVerified,
-                fcmToken:newUser.fcmToken
+                fcmToken: newUser.fcmToken
             },
         });
     } catch (error) {
@@ -344,11 +504,15 @@ export const addAddress = async (req, res) => {
         const user = await AppUser.findById(req.user._id);
         if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
-        const address = req.body;
+        const { address, fullName } = req.body;
 
         // If isDefault is true, unset previous defaults
         if (address.isDefault) {
             user.addresses = user.addresses.map(a => ({ ...a.toObject(), isDefault: false }));
+        }
+
+        if (fullName) {
+            user.fullName = fullName;
         }
 
         user.addresses.push(address);

@@ -67,12 +67,12 @@ const orderSchema = new mongoose.Schema({
     },
     paymentStatus: {
         type: String,
-        enum: ["Pending", "Paid", "Failed", "Refunded"],
+        enum: ["Pending", "Paid", "Failed", "Refunded", "Due"],
         default: "Pending"
     },
     paymentMethod: {
         type: String,
-        enum: ["Wallet", "Razorpay"],
+        enum: ["Wallet", "Razorpay", "Cash"],
         required: true
     },
     rider: {
@@ -90,7 +90,11 @@ const orderSchema = new mongoose.Schema({
         changedBy: { type: mongoose.Schema.Types.ObjectId },
         role: { type: String, enum: ['retailer', 'rider', 'system', 'user'], default: 'system' },
         timestamp: { type: Date, default: Date.now }
-    }]
+    }],
+    isManual: {
+        type: Boolean,
+        default: false
+    }
 }, { timestamps: true });
 
 export default mongoose.model("Order", orderSchema);

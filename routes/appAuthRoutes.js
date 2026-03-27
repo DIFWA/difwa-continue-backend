@@ -14,12 +14,15 @@ import {
     forgotPassword,
     addAddress,
     getAddresses,
-    deleteAddress
+    deleteAddress,
+    sendOtp,
+    verifyOtp
 } from "../controllers/appAuthController.js";
 import { getPublicCategories } from "../controllers/adminController.js";
 import { getPublicSubscriptionPlans } from "../controllers/subscriptionController.js";
 import { getPublicShops, getShopDetails, getShopProducts } from "../controllers/shopController.js";
 import { addToCart, getCart, clearCart, updateCartItem, removeFromCart } from "../controllers/cartController.js";
+// import { sendOtp, verifyOtp } from "../controllers/authController.js";
 
 // Categories (Public for App)
 router.get("/categories", getPublicCategories);
@@ -37,6 +40,11 @@ router.post("/register", registerUser);
 
 //login
 router.post("/login", loginUser);
+
+
+// OTP flow
+router.post("/auth/send-otp", sendOtp);
+router.post("/auth/verify-otp", verifyOtp);
 
 //get profile
 router.get("/profile", protectAppUser, getProfile);

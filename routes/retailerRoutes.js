@@ -10,7 +10,7 @@ import {
     deleteProduct
 } from "../controllers/productController.js";
 import { updateRetailerProfile } from "../controllers/authController.js";
-import { toggleShopStatus, finalizeOrderWeight, getRetailerDashboardStats, getRetailerCustomers, getRetailerRevenueStats, getRetailerOrders, getRetailerReviews, updateOrderItemStatus, assignRiderToOrder } from "../controllers/shopController.js";
+import { toggleShopStatus, finalizeOrderWeight, getRetailerDashboardStats, getRetailerCustomers, addManualCustomer, createManualOrder, settleCustomerDue, createManualSubscription, getRetailerSubscriptions, getRetailerRevenueStats, getRetailerOrders, getRetailerReviews, updateOrderItemStatus, assignRiderToOrder } from "../controllers/shopController.js";
 import { getDailyPrepList } from "../services/prepService.js";
 
 const router = express.Router();
@@ -23,9 +23,16 @@ router.get("/revenue-stats", protect, retailerOnly, getRetailerRevenueStats);
 
 // Customers
 router.get("/customers", protect, retailerOnly, getRetailerCustomers);
+router.post("/customers", protect, retailerOnly, addManualCustomer);
+router.post("/orders/manual", protect, retailerOnly, createManualOrder);
+router.post("/customers/settle-due", protect, retailerOnly, settleCustomerDue);
 
 // Orders
 router.get("/orders", protect, retailerOnly, getRetailerOrders);
+
+// Subscriptions
+router.get("/subscriptions", protect, retailerOnly, getRetailerSubscriptions);
+router.post("/subscriptions/manual", protect, retailerOnly, createManualSubscription);
 router.patch("/order-status", protect, retailerOnly, updateOrderItemStatus);
 router.post("/assign-rider", protect, retailerOnly, assignRiderToOrder);
 

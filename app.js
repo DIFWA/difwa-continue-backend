@@ -34,7 +34,7 @@ const allowedOrigins = [
 
 app.use(cors({
     origin: function (origin, callback) {
-        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+        if (!origin || allowedOrigins.indexOf(origin) !== -1 || origin.includes("ngrok")) {
             callback(null, true);
         } else {
             callback(new Error("Not allowed by CORS"));
@@ -42,7 +42,7 @@ app.use(cors({
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"]
+    allowedHeaders: ["Content-Type", "Authorization", "ngrok-skip-browser-warning"]
 }));
 
 app.use(express.json())

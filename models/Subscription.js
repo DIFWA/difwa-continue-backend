@@ -41,7 +41,15 @@ const subscriptionSchema = new mongoose.Schema({
     },
     endDate: Date,
     vacationDates: [Date], // Dates to skip
-    lastGeneratedDate: Date // To prevent double generation
+    lastGeneratedDate: Date, // To prevent double generation
+    isManual: {
+        type: Boolean,
+        default: false
+    },
+    deliveryAddress: {
+        type: String, // For manual entry
+        default: ""
+    }
 }, { timestamps: true });
 
 export default mongoose.model("Subscription", subscriptionSchema);
