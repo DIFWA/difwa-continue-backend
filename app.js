@@ -27,7 +27,7 @@ const app = express()
 // Middleware
 const allowedOrigins = [
     "https://difwa-frontend.vercel.app",
-    "http://localhost:3000", 
+    "http://localhost:3000",
     "http://localhost:3001",
     "http://localhost:5000"
 ];
@@ -88,13 +88,18 @@ app.use("/api/payout", payoutRoutes);
 app.use("/api/communication", communicationRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/app/orders", orderRoutes);
-app.use("/orders", orderRoutes); // Added for consistency if needed
+app.use("/app/orders", orderRoutes);
+app.use("/orders", orderRoutes);
 
 app.use("/api/payment", paymentRoutes);
 app.use("/api/cron", cronRoutes);
 app.use("/api/notifications", notificationRoutes);
+
 app.use("/api/app/favorites", favoriteRoutes);
+app.use("/app/favorites", favoriteRoutes);
+
 app.use("/api/app/search", searchRoutes);
+app.use("/app/search", searchRoutes);
 
 // Basic test route
 app.get("/", (req, res) => {
