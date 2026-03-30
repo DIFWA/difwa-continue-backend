@@ -10,7 +10,7 @@ import {
     deleteProduct
 } from "../controllers/productController.js";
 import { updateRetailerProfile } from "../controllers/authController.js";
-import { toggleShopStatus, finalizeOrderWeight, getRetailerDashboardStats, getRetailerCustomers, addManualCustomer, createManualOrder, settleCustomerDue, createManualSubscription, getRetailerSubscriptions, getRetailerRevenueStats, getRetailerOrders, getRetailerReviews, updateOrderItemStatus, assignRiderToOrder } from "../controllers/shopController.js";
+import { toggleShopStatus, finalizeOrderWeight, getRetailerDashboardStats, getRetailerCustomers, addManualCustomer, createManualOrder, settleCustomerDue, getDueOrdersForCustomer, createManualSubscription, getRetailerSubscriptions, getRetailerRevenueStats, getRetailerOrders, getRetailerReviews, updateOrderItemStatus, assignRiderToOrder } from "../controllers/shopController.js";
 import { searchAnything } from "../controllers/retailerSearchController.js";
 import { getDailyPrepList } from "../services/prepService.js";
 
@@ -28,6 +28,7 @@ router.get("/customers", protect, retailerOnly, getRetailerCustomers);
 router.post("/customers", protect, retailerOnly, addManualCustomer);
 router.post("/orders/manual", protect, retailerOnly, createManualOrder);
 router.post("/customers/settle-due", protect, retailerOnly, settleCustomerDue);
+router.get("/customers/:customerId/due-orders", protect, retailerOnly, getDueOrdersForCustomer);
 
 // Orders
 router.get("/orders", protect, retailerOnly, getRetailerOrders);

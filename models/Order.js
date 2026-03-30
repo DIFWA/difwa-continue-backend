@@ -94,6 +94,14 @@ const orderSchema = new mongoose.Schema({
     isManual: {
         type: Boolean,
         default: false
+    },
+    commissionRate: {
+        type: Number,
+        default: 0 // Percentage, e.g. 10 means 10%
+    },
+    commissionAmount: {
+        type: Number,
+        default: 0 // Absolute value deducted from retailer
     }
 }, { timestamps: true });
 

@@ -6,6 +6,7 @@ import Subscription from "../models/Subscription.js";
 import * as walletService from "../services/walletService.js";
 import { emitOrderUpdate } from "../services/socketService.js";
 import { createNotification } from "../services/notificationService.js";
+import { getCurrentCommissionRate } from "./commissionController.js";
 
 export const placeOrder = async (req, res) => {
     try {
@@ -81,10 +82,14 @@ export const placeOrder = async (req, res) => {
             await walletService.adjustBalance(userId, "appUser", totalAmount, "Debit", "Order Payment", "Order", null);
         }
 
-        // 3. Generate Order ID
+        // 3. Get current commission rate
+        const commissionRate = await getCurrentCommissionRate();
+        const commissionAmount = parseFloat(((totalAmount * commissionRate) / 100).toFixed(2));
+
+        // 4. Generate Order ID
         const orderId = `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-        // 4. Create Order
+        // 5. Create Order
         const order = await Order.create({
             orderId,
             user: userId,
@@ -93,7 +98,9 @@ export const placeOrder = async (req, res) => {
             deliveryAddress,
             paymentMethod,
             paymentStatus: paymentMethod === "Wallet" ? "Paid" : "Pending",
-            orderType: orderType || "One-time"
+            orderType: orderType || "One-time",
+            commissionRate,
+            commissionAmount
         });
 
         // 5. Update Stock & Check for Low Inventory

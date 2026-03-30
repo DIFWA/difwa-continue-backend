@@ -5,6 +5,7 @@ import Product from "../models/Product.js";
 import { adjustBalance } from "./walletService.js";
 import mongoose from "mongoose";
 import AppUser from "../models/AppUser.js";
+import { getCurrentCommissionRate } from "../controllers/commissionController.js";
 
 export const createSubscription = async (userId, subscriptionData) => {
     // Basic validation: Check if product exists and user has min balance
@@ -150,6 +151,10 @@ export const generateDailyOrders = async (targetDate = new Date()) => {
             }
 
             const orderId = `SUB-${Date.now()}-${sub._id.toString().slice(-4)}`;
+
+            const commissionRate = await getCurrentCommissionRate();
+            const commissionAmount = parseFloat(((amount * commissionRate) / 100).toFixed(2));
+
             const newOrder = await Order.create({
                 orderId,
                 user: sub.user,
@@ -166,7 +171,9 @@ export const generateDailyOrders = async (targetDate = new Date()) => {
                 paymentStatus,
                 paymentMethod,
                 isManual: sub.isManual || false,
-                deliveryAddress: sub.deliveryAddress ? { address: sub.deliveryAddress } : undefined
+                deliveryAddress: sub.deliveryAddress ? { address: sub.deliveryAddress } : undefined,
+                commissionRate,
+                commissionAmount
             });
 
             sub.lastGeneratedDate = targetDate;

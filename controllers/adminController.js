@@ -241,6 +241,21 @@ export const getDashboardStats = async (req, res) => {
         const completedOrders = await Order.countDocuments({ status: "Delivered" });
         const canceledOrders = await Order.countDocuments({ status: "Cancelled" });
 
+        // Total Commission Revenue
+        const revenueResult = await Order.aggregate([
+            { $match: { status: "Delivered" } },
+            {
+                $group: {
+                    _id: null,
+                    totalCommission: { $sum: "$commissionAmount" },
+                    totalGross: { $sum: "$totalAmount" }
+                }
+            }
+        ]);
+
+        const totalCommissionRevenue = revenueResult.length > 0 ? revenueResult[0].totalCommission : 0;
+        const totalGrossVolume = revenueResult.length > 0 ? revenueResult[0].totalGross : 0;
+
         // Last 7 days chart data
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
@@ -288,7 +303,9 @@ export const getDashboardStats = async (req, res) => {
                     totalOrders,
                     newOrders,
                     completedOrders,
-                    canceledOrders
+                    canceledOrders,
+                    totalCommissionRevenue,
+                    totalGrossVolume
                 },
                 chartData,
                 recentShops

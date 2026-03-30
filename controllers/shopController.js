@@ -6,6 +6,7 @@ import Subscription from "../models/Subscription.js";
 import { adjustBalance } from "../services/walletService.js";
 import { emitOrderUpdate, emitShopStatusUpdate } from "../services/socketService.js";
 import { createNotification } from "../services/notificationService.js";
+import { getCurrentCommissionRate } from "./commissionController.js";
 
 // Get all approved shops (retailers)
 export const getPublicShops = async (req, res) => {
@@ -258,10 +259,10 @@ export const getRetailerDashboardStats = async (req, res) => {
         });
 
         // 2. Low Stock Alerts
-        const lowStockProducts = await Product.find({ 
-            retailer: retailerId, 
-            stock: { $lt: 5 }, 
-            status: "Published" 
+        const lowStockProducts = await Product.find({
+            retailer: retailerId,
+            stock: { $lt: 5 },
+            status: "Published"
         }).limit(5);
 
         lowStockProducts.forEach(product => {
@@ -322,28 +323,83 @@ import Payout from "../models/Payout.js";
 export const getRetailerRevenueStats = async (req, res) => {
     try {
         const retailerId = req.user._id;
+        const { range = 'month', startDate: customStart, endDate: customEnd } = req.query; 
 
-        // 1. Calculate Total Earnings (Lifetime) and This Month's Earnings
+        // 1. Define Date Range
+        let startDate = new Date();
+        let endDate = new Date();
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(23, 59, 59, 999);
+
+        if (range === 'yesterday') {
+            startDate.setDate(startDate.getDate() - 1);
+            endDate.setDate(endDate.getDate() - 1);
+        } else if (range === 'tomorrow') {
+            startDate.setDate(startDate.getDate() + 1);
+            endDate.setDate(endDate.getDate() + 1);
+        } else if (range === 'week') {
+            startDate.setDate(startDate.getDate() - 7);
+        } else if (range === 'month') {
+            startDate.setDate(1); 
+        } else if (range === 'custom' && customStart && customEnd) {
+            startDate = new Date(customStart);
+            startDate.setHours(0, 0, 0, 0);
+            endDate = new Date(customEnd);
+            endDate.setHours(23, 59, 59, 999);
+        }
+
+        // 2. Fetch all orders to calculate lifetime AND filtered stats
         const orders = await Order.find({ "items.retailer": retailerId });
 
-        let totalEarnings = 0;
-        let earningsThisMonth = 0;
-
-        const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        let totalGrossEarnings = 0;
+        let totalCommissionDeducted = 0;
+        let filteredEarnings = 0;
+        let filteredGross = 0;
+        let filteredCommission = 0;
+        const earningsBreakdown = [];
 
         orders.forEach(order => {
+            let orderGrossForRetailer = 0;
             order.items.forEach(item => {
                 if (item.retailer && item.retailer.toString() === retailerId.toString()) {
-                    const itemRevenue = item.price * item.quantity;
-                    totalEarnings += itemRevenue;
-
-                    if (new Date(order.createdAt) >= startOfMonth) {
-                        earningsThisMonth += itemRevenue;
-                    }
+                    orderGrossForRetailer += item.price * item.quantity;
                 }
             });
+
+            if (orderGrossForRetailer === 0) return;
+
+            const rate = order.commissionRate || 0;
+            const commission = parseFloat(((orderGrossForRetailer * rate) / 100).toFixed(2));
+            const net = orderGrossForRetailer - commission;
+
+            // Lifetime Accumulators
+            totalGrossEarnings += orderGrossForRetailer;
+            totalCommissionDeducted += commission;
+
+            // Filtered Accumulators
+            const orderDate = new Date(order.createdAt);
+            if (orderDate >= startDate && orderDate <= endDate) {
+                filteredGross += orderGrossForRetailer;
+                filteredCommission += commission;
+                filteredEarnings += net;
+
+                earningsBreakdown.push({
+                    orderId: order._id,
+                    orderNumber: order.orderId,
+                    date: order.createdAt,
+                    gross: orderGrossForRetailer,
+                    commission: commission,
+                    commissionRate: rate,
+                    net: net,
+                    status: order.paymentStatus || (order.orderStatus === 'Delivered' ? 'Cleared' : 'Pending')
+                });
+            }
         });
+
+        // Sort by date descending
+        earningsBreakdown.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        const totalNetEarnings = totalGrossEarnings - totalCommissionDeducted;
 
         // 2. Fetch Payouts to calculate Settled and Requested
         const payouts = await Payout.find({ retailer: retailerId });
@@ -354,22 +410,39 @@ export const getRetailerRevenueStats = async (req, res) => {
         payouts.forEach(payout => {
             if (payout.status === 'Approved') {
                 totalSettled += payout.amount;
-                totalRequestedOrPending += payout.amount; // Since it's already approved, it's taken from available balance
+                totalRequestedOrPending += payout.amount;
             } else if (payout.status === 'Pending') {
-                totalRequestedOrPending += payout.amount; // Pending is also locked from available balance
+                totalRequestedOrPending += payout.amount;
             }
         });
 
-        // 3. Calculate Available Balance
-        const availableBalance = totalEarnings - totalRequestedOrPending;
+        // 3. Available Balance = Net Earnings - already settled/pending payouts
+        const availableBalance = totalNetEarnings - totalRequestedOrPending;
+
+        // 4. Get current commission rate for display
+        let currentCommissionRate = 0;
+        try {
+            const CommissionSetting = (await import("../models/CommissionSetting.js")).default;
+            const setting = await CommissionSetting.findOne({ isActive: true }).select("rate");
+            currentCommissionRate = setting ? setting.rate : 0;
+        } catch (_) { /* ignore */ }
 
         res.status(200).json({
             success: true,
             data: {
-                availableBalance: availableBalance > 0 ? availableBalance : 0,
-                estimatedEarnings: earningsThisMonth,
-                totalSettled: totalSettled,
-                totalEarnings: totalEarnings
+                availableBalance: availableBalance > 0 ? parseFloat(availableBalance.toFixed(2)) : 0,
+                estimatedEarnings: parseFloat(filteredEarnings.toFixed(2)),
+                totalSettled: parseFloat(totalSettled.toFixed(2)),
+                totalEarnings: parseFloat(totalNetEarnings.toFixed(2)),
+                totalGrossEarnings: parseFloat(totalGrossEarnings.toFixed(2)),
+                totalCommissionDeducted: parseFloat(totalCommissionDeducted.toFixed(2)),
+                commissionRate: currentCommissionRate,
+                earningsBreakdown,
+                filteredStats: {
+                    gross: parseFloat(filteredGross.toFixed(2)),
+                    commission: parseFloat(filteredCommission.toFixed(2)),
+                    net: parseFloat(filteredEarnings.toFixed(2))
+                }
             }
         });
 
@@ -378,12 +451,13 @@ export const getRetailerRevenueStats = async (req, res) => {
     }
 };
 
+
 export const getRetailerCustomers = async (req, res) => {
     try {
         const retailerId = req.user._id;
 
         // 1. Get all orders involving this retailer and populate customer info
-        const orders = await Order.find({ "items.retailer": retailerId }).populate("user", "fullName email phoneNumber profilePicture isManual addresses");
+        const orders = await Order.find({ "items.retailer": retailerId }).populate("user", "fullName email phoneNumber profilePicture isManual addresses retailerBalances");
 
         const customerMap = new Map();
 
@@ -551,10 +625,10 @@ export const addManualCustomer = async (req, res) => {
                 user.addedByRetailer = retailerId;
                 await user.save();
             }
-            return res.status(200).json({ 
-                success: true, 
-                message: "Customer linked successfully", 
-                data: user 
+            return res.status(200).json({
+                success: true,
+                message: "Customer linked successfully",
+                data: user
             });
         }
 
@@ -609,7 +683,7 @@ export const createManualOrder = async (req, res) => {
 
         // 3. Create Order
         const { paymentMethod = "Cash", paymentStatus = "Pending", deliveryAddress } = req.body;
-        
+
         // SYNC ADDRESS to Customer Profile (so it shows in mobile app)
         if (deliveryAddress && typeof deliveryAddress === 'string') {
             const addressExists = customer.addresses.some(a => a.fullAddress === deliveryAddress);
@@ -624,6 +698,10 @@ export const createManualOrder = async (req, res) => {
         }
 
         const orderId = `ORD-MAN-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+        const commissionRate = await getCurrentCommissionRate();
+        const commissionAmount = parseFloat(((totalAmount * commissionRate) / 100).toFixed(2));
+
         const order = await Order.create({
             orderId,
             user: customerId,
@@ -634,6 +712,8 @@ export const createManualOrder = async (req, res) => {
             paymentStatus,
             status: "Accepted",
             isManual: true,
+            commissionRate,
+            commissionAmount,
             statusHistory: [{
                 status: "Accepted",
                 changedBy: retailerId,
@@ -933,19 +1013,19 @@ export const settleCustomerDue = async (req, res) => {
         );
 
         if (balanceIndex === -1 || customer.retailerBalances[balanceIndex].balance < amount) {
-            return res.status(400).json({ 
-                success: false, 
-                message: "Settlement amount cannot exceed current balance" 
+            return res.status(400).json({
+                success: false,
+                message: "Settlement amount cannot exceed current balance"
             });
         }
 
         customer.retailerBalances[balanceIndex].balance -= amount;
         await customer.save();
 
-        res.status(200).json({ 
-            success: true, 
-            message: "Balance settled successfully", 
-            newBalance: customer.retailerBalances[balanceIndex].balance 
+        res.status(200).json({
+            success: true,
+            message: "Balance settled successfully",
+            newBalance: customer.retailerBalances[balanceIndex].balance
         });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -1014,3 +1094,37 @@ export const getRetailerSubscriptions = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+export const getDueOrdersForCustomer = async (req, res) => {
+    try {
+        const User = (await import("../models/User.js")).default;
+        const retailerId = req.user._id;
+        const { customerId } = req.params;
+
+        // Find all orders where this customer owes money to THIS retailer
+        const orders = await Order.find({
+            user: customerId,
+            "items.retailer": retailerId,
+            paymentStatus: "Due"
+        }).sort({ createdAt: -1 });
+
+        // Get Shop / Retailer Info
+        const retailer = await User.findById(retailerId).select("name email businessDetails phoneNumber");
+
+        // Get Customer Info
+        const customer = await AppUser.findById(customerId).select("fullName phoneNumber addresses email");
+
+        res.status(200).json({
+            success: true,
+            data: {
+                retailer,
+                customer,
+                orders,
+                totalDue: orders.reduce((acc, o) => acc + o.totalAmount, 0)
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
