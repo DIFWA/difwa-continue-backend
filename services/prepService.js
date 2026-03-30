@@ -37,7 +37,7 @@ export const getDailyPrepList = async (retailerId, dateString) => {
                 productName: item.product.name,
                 category: item.product.category || "Uncategorized",
                 quantity: 0,
-                unit: item.product.unit || "L", // Changed default to "L" for water business
+                unit: item.product.unit || "L",
                 orderCount: 0,
                 subscriptionCount: 0,
                 oneTimeCount: 0,
