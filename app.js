@@ -25,48 +25,33 @@ import commissionRoutes from "./routes/commissionRoutes.js";
 const app = express()
 
 
-// Middleware
-const allowedOrigins = [
-    "https://difwa-frontend.vercel.app",
-    "https://difwa-admin-vendor-web.vercel.app",
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://localhost:3002",
-    "http://localhost:5000",
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:3001",
-    "http://127.0.0.1:54321"
-];
 
 app.use(cors({
-    origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl)
-        if (!origin) return callback(null, true);
-
-        const isAllowed = allowedOrigins.indexOf(origin) !== -1 ||
-            origin.includes("ngrok") ||
-            origin.includes("localhost") ||
-            origin.includes("127.0.0.1") ||
-            origin.includes(".vercel.app");
-
-        if (isAllowed) {
-            callback(null, true);
-        } else {
-            console.log("CORS Rejected Origin:", origin);
-            callback(new Error("Not allowed by CORS"));
-        }
-    },
+    origin: true,
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "ngrok-skip-browser-warning", "Accept", "X-Requested-With", "Origin"]
 }));
 
+app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+    res.header("Access-Control-Allow-Credentials", "true");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, ngrok-skip-browser-warning, Accept, X-Requested-With, Origin");
+
+    if (req.method === "OPTIONS") {
+        return res.sendStatus(200);
+    }
+    next();
+});
+
+
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }));
-// Connect to Database per request (more reliable for Vercel serverless)
+
 import connectDB from "./config/db.js"
 app.use(async (req, res, next) => {
-    // Skip DB connection for preflight requests to avoid timeouts/CORS errors
+
     if (req.method === "OPTIONS") {
         return next();
     }
