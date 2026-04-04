@@ -18,6 +18,7 @@ const seedData = async () => {
 
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash('password123', salt);
+        const vendorPassword = await bcrypt.hash('123456', salt);
 
         // 1. Create Admin
         let admin = await User.findOne({ email: 'admin@shrimpbite.com' });
@@ -37,8 +38,30 @@ const seedData = async () => {
         // 2. Create Retailers
         const retailersData = [
             {
+                name: 'Difwa Vendor',
+                email: 'difwavendor@gmail.com',
+                password: vendorPassword,
+                role: 'retailer',
+                status: 'approved',
+                phone: '9999999999',
+                businessDetails: {
+                    businessName: 'Difwa Seafoods',
+                    businessType: 'Seafood Retail Store',
+                    location: { 
+                        address: '123 Marine Drive',
+                        city: 'Mumbai', 
+                        state: 'Maharashtra',
+                        pincode: '400001'
+                    },
+                    legal: {
+                        gst: '27AAAAA0000A1Z5',
+                        fssai: '12345678901234'
+                    }
+                }
+            },
+            {
                 name: 'Fresh catch Hub',
-                email: '    ',
+                email: 'retailer1@shrimpbite.com',
                 password: hashedPassword,
                 role: 'retailer',
                 status: 'approved',
@@ -93,7 +116,9 @@ const seedData = async () => {
         ];
 
         for (const u of appUsersData) {
-            const exists = await AppUser.findOne({ email: u.email });
+            const exists = await AppUser.findOne({ 
+                $or: [{ email: u.email }, { phoneNumber: u.phoneNumber }] 
+            });
             if (!exists) {
                 await AppUser.create(u);
                 console.log(`App User ${u.fullName} created 👥`);
@@ -181,7 +206,7 @@ const seedData = async () => {
         ];
 
         for (const p of productsData) {
-            const exists = await Product.findOne({ name: p.name });
+            const exists = await Product.findOne({ name: p.name, retailer: p.retailer });
             if (!exists) {
                 await Product.create(p);
                 console.log(`Product ${p.name} created 🦐`);
