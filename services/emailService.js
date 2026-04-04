@@ -10,32 +10,28 @@ const transporter = nodemailer.createTransport({
 
 export const sendWelcomeEmail = async (email, name) => {
     const mailOptions = {
-        from: `"ShrimpBite 🦐" <${process.env.EMAIL_USER}>`,
+        from: `"Difwa Water" <${process.env.EMAIL_USER}>`,
         to: email,
-        subject: "Welcome to ShrimpBite 🦐",
+        subject: "Welcome to Difwa Water",
         html: `
       <div style="font-family: Arial; padding:20px;">
-        <h2>Welcome to ShrimpBite, ${name}! 🦐</h2>
+        <h2>Welcome to Difwa Water, ${name}!</h2>
         
-        <p>We're excited to have you join our seafood community.</p>
+        <p>We're excited to have you join our premium water distribution network.</p>
         
         <p>
-          Discover fresh seafood, explore amazing retailers,
-          and enjoy a smooth ordering experience.
+          Discover high-quality water suppliers, explore reliable retailers,
+          and enjoy a seamless ordering experience.
         </p>
-
-        <p>
-          Start exploring the app and find the best seafood near you!
-        </p>
-
+ 
         <br/>
-
-        <p>Happy shopping! 🦐</p>
-        <p><strong>The ShrimpBite Team</strong></p>
+ 
+        <p>Stay hydrated!</p>
+        <p><strong>The Difwa Water Team</strong></p>
       </div>
     `
     };
-
+ 
     await transporter.sendMail(mailOptions);
 };
 
@@ -93,6 +89,25 @@ export const sendOtpEmail = async (email, otp) => {
         return true;
     } catch (error) {
         console.error("Error sending OTP email:", error);
+        return false;
+    }
+};
+
+export const sendMarketingEmail = async (emails, subject, htmlContent) => {
+    // Send to bulk emails in one go (comma-separated 'to' or 'bcc' for privacy)
+    // Using BCC is better for bulk marketing to prevent recipients from seeing each other's emails
+    const mailOptions = {
+        from: `"Difwa Marketing 🚀" <${process.env.EMAIL_USER}>`,
+        bcc: emails, // Use BCC for bulk
+        subject: subject,
+        html: htmlContent,
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        return true;
+    } catch (error) {
+        console.error("Error sending bulk marketing email:", error);
         return false;
     }
 };

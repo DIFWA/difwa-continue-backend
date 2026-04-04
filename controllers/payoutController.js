@@ -50,7 +50,52 @@ export const approvePayout = async (req, res) => {
 };
 export const getAllPayouts = async (req, res) => {
     try {
-        const payouts = await Payout.find().populate('retailer', 'name email businessDetails').sort({ createdAt: -1 });
+        const { search = "" } = req.query;
+        let query = {};
+
+        if (search) {
+            query = {
+                $or: [
+                    { transactionId: { $regex: search, $options: 'i' } },
+                    { "retailer.businessDetails.businessName": { $regex: search, $options: 'i' } }
+                ]
+            };
+        }
+
+        // Note: MongoDB doesn't allow searching populated fields directly in find()
+        // So we'll have to use an aggregation or find and then filter, 
+        // but for simplicity here we'll search by transactionId and 
+        // filter the populated results if searching by shop name.
+        
+        let payouts = await Payout.find(search ? { transactionId: { $regex: search, $options: 'i' } } : {})
+            .populate('retailer', 'name email businessDetails')
+            .sort({ createdAt: -1 });
+
+        if (search) {
+            // Further filter by shop name if no results found by transaction ID
+            const filteredByShop = await Payout.find({})
+                .populate({
+                    path: 'retailer',
+                    match: { "businessDetails.businessName": { $regex: search, $options: 'i' } },
+                    select: 'name email businessDetails'
+                })
+                .sort({ createdAt: -1 });
+            
+            // Filter out items where retailer didn't match the search
+            const shopResults = filteredByShop.filter(p => p.retailer !== null);
+            
+            // Merge and deduplicate
+            const txnIds = new Set(payouts.map(p => p._id.toString()));
+            shopResults.forEach(p => {
+                if (!txnIds.has(p._id.toString())) {
+                    payouts.push(p);
+                }
+            });
+            
+            // Re-sort by createdAt desc
+            payouts.sort((a, b) => b.createdAt - a.createdAt);
+        }
+
         res.json(payouts);
     } catch (error) {
         res.status(500).json({ message: error.message });

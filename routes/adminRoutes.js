@@ -14,7 +14,8 @@ import {
     updateRole,
     deleteRole,
     inviteAdminUser,
-    changeAdminPassword
+    changeAdminPassword,
+    deleteRetailer
 } from "../controllers/adminController.js";
 import {
     getSubscriptionPlans,
@@ -66,4 +67,7 @@ router.post("/invite", protect, adminOnly, inviteAdminUser)
 // Change Password
 router.put("/change-password", protect, changeAdminPassword)
 
-export default router
+// Delete Retailer
+router.delete("/retailers/:id", protect, adminOnly, deleteRetailer)
+
+export default router;

@@ -51,6 +51,7 @@ import User from "../models/User.js";
 import Notification from "../models/Notification.js";
 import { sendPushNotification } from "../services/notificationService.js";
 import { emitNotification } from "../services/socketService.js";
+import { sendMarketingEmail } from "../services/emailService.js";
 
 export const sendBulkNotification = async (req, res) => {
     try {
@@ -136,7 +137,37 @@ export const sendBulkNotification = async (req, res) => {
     }
 };
 
+
 export const sendBulkEmail = async (req, res) => {
-    // Current requirement: Email marketing removed from UI
-    res.status(403).json({ message: "Email broadcast is currently disabled." });
+    try {
+        const { subject, htmlContent } = req.body;
+
+        if (!subject || !htmlContent) {
+            return res.status(400).json({ success: false, message: "Subject and HTML content are required" });
+        }
+
+        // Fetch all approved retailers
+        const retailers = await User.find({ role: "retailer", status: "approved" }).select("email");
+        const emailList = retailers.map(u => u.email).filter(e => e);
+
+        if (emailList.length === 0) {
+            return res.status(404).json({ success: false, message: "No approved retailers with emails found" });
+        }
+
+        const success = await sendMarketingEmail(emailList, subject, htmlContent);
+
+        if (success) {
+            res.json({
+                success: true,
+                message: `Email campaign launched successfully to ${emailList.length} retailers.`,
+                count: emailList.length
+            });
+        } else {
+            res.status(500).json({ success: false, message: "Failed to dispatch emails" });
+        }
+
+    } catch (error) {
+        console.error("Bulk email error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
 };

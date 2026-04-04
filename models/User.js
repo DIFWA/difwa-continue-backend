@@ -42,7 +42,7 @@ const userSchema = new mongoose.Schema({
         ownerName: String,
         businessType: {
             type: String,
-            enum: ["Seafood Retail Store", "Frozen Products Store", "Supermarket", "Kirana Store", "Distributor"]
+            enum: ["Water Retail Store", "Water Plant", "Supermarket", "Kirana Store", "Distributor"]
         },
         yearsInBusiness: String,
         coldStorage: {

@@ -3,6 +3,11 @@ import AppUser from "../models/AppUser.js";
 import Category from "../models/Category.js";
 import Order from "../models/Order.js";
 import Role from "../models/Role.js";
+import Product from "../models/Product.js";
+import Review from "../models/Review.js";
+import Payout from "../models/Payout.js";
+import Favorite from "../models/Favorite.js";
+import Subscription from "../models/Subscription.js";
 import bcrypt from "bcryptjs";
 import { sendInviteEmail } from "../services/emailService.js";
 // --- CATEGORY CONTROLLERS ---
@@ -198,6 +203,73 @@ export const updateRetailerStatus = async (req, res) => {
             success: true,
             message: `Retailer ${status} successfully`,
             data: user,
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
+
+// Delete retailer
+export const deleteRetailer = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const user = await User.findById(id);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "Retailer not found",
+            });
+        }
+
+        // Check if it's actually a retailer
+        if (user.role !== "retailer") {
+            return res.status(400).json({
+                success: false,
+                message: "User is not a retailer",
+            });
+        }
+
+        // Step-by-step cleanup of MongoDB
+        const retailerId = id;
+
+        // 1. Get all products to clean up related data like favorites
+        const products = await Product.find({ retailer: retailerId }).select("_id");
+        const productIds = products.map(p => p._id);
+
+        // 2. Delete all products of this retailer
+        await Product.deleteMany({ retailer: retailerId });
+
+        // 3. Delete favorites of those products
+        await Favorite.deleteMany({ product: { $in: productIds } });
+
+        // 4. Delete reviews for this retailer or their products
+        await Review.deleteMany({
+            $or: [
+                { retailer: retailerId },
+                { product: { $in: productIds } }
+            ]
+        });
+
+        // 5. Delete payouts
+        await Payout.deleteMany({ retailer: retailerId });
+
+        // 6. Delete subscriptions
+        await Subscription.deleteMany({ retailer: retailerId });
+
+        // 7. Delete orders (any order that has an item belonging to this retailer)
+        await Order.deleteMany({ "items.retailer": retailerId });
+
+        // 8. Finally delete the User (Retailer profile)
+        await User.findByIdAndDelete(retailerId);
+
+        res.status(200).json({
+            success: true,
+            message: "Retailer and all associated data (products, orders, reviews, etc.) removed permanently from MongoDB",
         });
 
     } catch (error) {
