@@ -26,6 +26,48 @@ export const initSocket = (server) => {
     io.on("connection", (socket) => {
         _log("Client Connected", { data: socket.id, status: "SUCCESS" });
 
+        // Joining a room for hardware updates
+        socket.on("join-hardware-room", (deviceId) => {
+            socket.join(`device_${deviceId}`);
+            _log("Client Joined Hardware Room", { data: { socketId: socket.id, deviceId } });
+        });
+
+        // ─── Hardware -> Server Data ──────────────────────────────────────────
+        socket.on("hardware:level-update", async (data) => {
+            const { deviceId, level } = data;
+            _log("Hardware Data Received", { data: { deviceId, level }, status: "INFO" });
+
+            // Relay to all Web UI clients in the room
+            io.to(`device_${deviceId}`).emit("hardware:level-update", { level });
+
+            // Optionally update database in the background
+            try {
+                // If automation is on, you could trigger a toggle event here
+                // We'll keep it simple for now and just relay
+            } catch (err) {
+                console.error("Hardware update sync failed:", err.message);
+            }
+        });
+
+        // ─── Web UI -> Server Command ─────────────────────────────────────────
+        socket.on("commands:toggle-pump", (data) => {
+            const { deviceId, status } = data;
+            _log("Pump Command Received", { data: { deviceId, status }, status: "WARNING" });
+
+            // Forward to the hardware device
+            // The ESP8266 should be listening for 'commands:toggle-pump'
+            io.to(`device_${deviceId}`).emit("commands:toggle-pump", { status });
+        });
+
+        // ─── Hardware -> Server Status Confirmation ───────────────────────────
+        socket.on("hardware:pump-confirm", (data) => {
+            const { deviceId, status } = data;
+            _log("Hardware Status Confirmed", { data: { deviceId, status }, status: "SUCCESS" });
+
+            // Relay to Web UI
+            io.to(`device_${deviceId}`).emit("hardware:pump-status", { status });
+        });
+
         socket.on("join", (room) => {
             socket.join(room);
             _log("Client Joined Room", { data: { socketId: socket.id, room } });
