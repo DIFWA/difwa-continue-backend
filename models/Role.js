@@ -17,6 +17,11 @@ const roleSchema = new mongoose.Schema({
     securityLevel: {
         type: Number,
         default: 0
+    },
+    updatedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null
     }
 }, { timestamps: true });
 

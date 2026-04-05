@@ -15,7 +15,10 @@ import {
     deleteRole,
     inviteAdminUser,
     changeAdminPassword,
-    deleteRetailer
+    deleteRetailer,
+    getAdminUsers,
+    updateAdminUser,
+    deleteAdminUser
 } from "../controllers/adminController.js";
 import {
     getSubscriptionPlans,
@@ -69,5 +72,10 @@ router.put("/change-password", protect, changeAdminPassword)
 
 // Delete Retailer
 router.delete("/retailers/:id", protect, adminOnly, deleteRetailer)
+
+// Admin User Management
+router.get("/admins", protect, adminOnly, getAdminUsers)
+router.put("/admins/:id", protect, adminOnly, updateAdminUser)
+router.delete("/admins/:id", protect, adminOnly, deleteAdminUser)
 
 export default router;

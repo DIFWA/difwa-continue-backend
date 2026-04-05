@@ -453,7 +453,7 @@ export const getAllOrders = async (req, res) => {
 // --- ROLE MANAGEMENT ---
 export const getRoles = async (req, res) => {
     try {
-        const roles = await Role.find().sort({ name: 1 });
+        const roles = await Role.find().populate("updatedBy", "name").sort({ name: 1 });
         res.status(200).json({ success: true, data: roles });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -463,7 +463,7 @@ export const getRoles = async (req, res) => {
 export const createRole = async (req, res) => {
     try {
         const { name, description, permissions, securityLevel } = req.body;
-        const role = await Role.create({ name, description, permissions, securityLevel });
+        const role = await Role.create({ name, description, permissions, securityLevel, updatedBy: req.user.id });
         res.status(201).json({ success: true, data: role });
     } catch (error) {
         if (error.code === 11000) return res.status(400).json({ success: false, message: "Role already exists" });
@@ -475,7 +475,13 @@ export const updateRole = async (req, res) => {
     try {
         const { id } = req.params;
         const { name, description, permissions, securityLevel } = req.body;
-        const role = await Role.findByIdAndUpdate(id, { name, description, permissions, securityLevel }, { new: true });
+        const role = await Role.findByIdAndUpdate(id, {
+            name,
+            description,
+            permissions,
+            securityLevel,
+            updatedBy: req.user.id
+        }, { new: true });
         if (!role) return res.status(404).json({ success: false, message: "Role not found" });
         res.status(200).json({ success: true, data: role });
     } catch (error) {
@@ -567,6 +573,73 @@ export const changeAdminPassword = async (req, res) => {
         await user.save();
 
         res.status(200).json({ success: true, message: "Password updated successfully" });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// --- ADMIN USER MANAGEMENT ---
+export const getAdminUsers = async (req, res) => {
+    try {
+        const admins = await User.find({ role: "admin" })
+            .populate("roleId", "name permissions")
+            .populate("updatedBy", "name")
+            .select("-password")
+            .sort({ createdAt: -1 });
+
+        res.status(200).json({ success: true, data: admins });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const updateAdminUser = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { roleId, permissions } = req.body;
+
+        const admin = await User.findById(id);
+        if (!admin || admin.role !== "admin") {
+            return res.status(404).json({ success: false, message: "Admin user not found" });
+        }
+
+        if (roleId) {
+            const role = await Role.findById(roleId);
+            if (!role) {
+                return res.status(404).json({ success: false, message: "Role not found" });
+            }
+            admin.roleId = roleId;
+        }
+
+        if (permissions !== undefined) {
+            admin.permissions = permissions;
+            admin.updatedBy = req.user.id; // Record who changed the direct permissions
+        }
+
+        await admin.save();
+
+        res.status(200).json({ success: true, message: "Admin user updated successfully" });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const deleteAdminUser = async (req, res) => {
+    try {
+        const { id } = req.params;
+        // admin can't delete themselves
+        if(id === req.user.id) {
+            return res.status(400).json({ success: false, message: "You cannot delete yourself" });
+        }
+        
+        const admin = await User.findById(id);
+
+        if (!admin || admin.role !== "admin") {
+            return res.status(404).json({ success: false, message: "Admin user not found" });
+        }
+
+        await User.findByIdAndDelete(id);
+        res.status(200).json({ success: true, message: "Admin user deleted successfully" });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

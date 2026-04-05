@@ -15,18 +15,18 @@ export const requestPayout = async (req, res) => {
         });
 
         await payout.save();
-        res.status(201).json({ message: "Payout requested successfully", payout });
+        res.status(201).json({ success: true, message: "Payout requested successfully", data: payout });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
 export const getPayoutHistory = async (req, res) => {
     try {
         const payouts = await Payout.find({ retailer: req.user.id }).sort({ createdAt: -1 });
-        res.json(payouts);
+        res.json({ success: true, data: payouts });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
@@ -43,9 +43,9 @@ export const approvePayout = async (req, res) => {
         payout.processedAt = Date.now();
 
         await payout.save();
-        res.json({ message: "Payout approved", payout });
+        res.json({ success: true, message: "Payout approved", data: payout });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 export const getAllPayouts = async (req, res) => {
@@ -96,8 +96,8 @@ export const getAllPayouts = async (req, res) => {
             payouts.sort((a, b) => b.createdAt - a.createdAt);
         }
 
-        res.json(payouts);
+        res.json({ success: true, data: payouts });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ success: false, message: error.message });
     }
 };

@@ -78,6 +78,15 @@ const userSchema = new mongoose.Schema({
     isFirstLogin: {
         type: Boolean,
         default: true
+    },
+    permissions: {
+        type: [String],
+        default: []
+    },
+    updatedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null
     }
 }, { timestamps: true })
 

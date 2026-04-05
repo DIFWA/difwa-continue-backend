@@ -70,7 +70,8 @@ export const loginUser = async (req, res) => {
                 role: user.role,
                 isShopActive: user.isShopActive,
                 roleId: user.roleId,
-                isFirstLogin: user.isFirstLogin
+                isFirstLogin: user.isFirstLogin,
+                permissions: user.permissions && user.permissions.length > 0 ? user.permissions : (user.roleId?.permissions || [])
             }
         })
     } catch (error) {
@@ -124,7 +125,10 @@ export const getCurrentUser = async (req, res) => {
         const user = await User.findById(req.params.id).populate("roleId")
         if (!user) return res.status(404).json({ message: "User not found" })
 
-        res.status(200).json(user)
+        const userObj = user.toObject();
+        userObj.permissions = user.permissions && user.permissions.length > 0 ? user.permissions : (user.roleId?.permissions || []);
+
+        res.status(200).json({ success: true, data: userObj })
     } catch (error) {
         console.error(error)
         res.status(500).json({ message: "Something went wrong" })
