@@ -13,6 +13,7 @@ import { updateRetailerProfile } from "../controllers/authController.js";
 import { toggleShopStatus, finalizeOrderWeight, getRetailerDashboardStats, getRetailerCustomers, addManualCustomer, createManualOrder, settleCustomerDue, getDueOrdersForCustomer, createManualSubscription, getRetailerSubscriptions, getRetailerRevenueStats, getRetailerOrders, getRetailerReviews, updateOrderItemStatus, assignRiderToOrder } from "../controllers/shopController.js";
 import { searchAnything } from "../controllers/retailerSearchController.js";
 import { getDailyPrepList } from "../services/prepService.js";
+import { handleBulkOrders } from "../controllers/orderController.js";
 
 const router = express.Router();
 
@@ -32,6 +33,7 @@ router.get("/customers/:customerId/due-orders", protect, retailerOnly, getDueOrd
 
 // Orders
 router.get("/orders", protect, retailerOnly, getRetailerOrders);
+router.post("/orders/bulk-process" , protect , retailerOnly, handleBulkOrders)
 
 // Subscriptions
 router.get("/subscriptions", protect, retailerOnly, getRetailerSubscriptions);

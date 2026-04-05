@@ -762,9 +762,14 @@ export const getRetailerOrders = async (req, res) => {
         // Fetch all orders containing items from this retailer and populate product, rider, and subscription info
         const orders = await Order.find(query)
             .populate("items.product", "name")
-            .populate("rider", "name")
+            .populate("rider", "name email phone")
             .populate("subscriptionId", "frequency customDays")
             .sort({ createdAt: -1 });
+
+        console.log("🔍 ORDERS DEBUG:", orders.length, "orders found");
+        if (orders.length > 0) {
+            console.log("📋 First order rider data:", JSON.stringify(orders[0].rider, null, 2));
+        }
 
         // Calculate Stats
         const totalOrders = orders.length;
@@ -905,7 +910,8 @@ export const updateOrderItemStatus = async (req, res) => {
                 message: `Order #${orderId.slice(-6).toUpperCase()} delivered to ${customer?.fullName || "Customer"} customer by your team.`,
                 type: "Order",
                 referenceId: orderId
-            });
+            }); 
+            
         }
 
         res.status(200).json({ success: true, message: "Order status updated successfully", order });
@@ -987,10 +993,13 @@ export const assignRiderToOrder = async (req, res) => {
         order.status = "Rider Assigned"; // Sync main order status
         await order.save();
 
-        // Emit real-time update to retailer and rider
-        await emitOrderUpdate(orderId, "Rider Assigned", { orderId, riderId, order }, retailerId, null, riderId);
+        // Populate rider before sending response
+        const populatedOrder = await Order.findById(order._id).populate("rider", "name email phone");
 
-        res.status(200).json({ success: true, message: "Rider assigned successfully", data: order });
+        // Emit real-time update to retailer and rider
+        await emitOrderUpdate(orderId, "Rider Assigned", { orderId, riderId, order: populatedOrder }, retailerId, null, riderId);
+
+        res.status(200).json({ success: true, message: "Rider assigned successfully", data: populatedOrder });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

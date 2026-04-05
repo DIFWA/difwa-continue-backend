@@ -4,9 +4,11 @@ import connectDB from "./config/db.js"
 import { initCronJobs } from "./cron.js";
 import { initSocket } from "./services/socketService.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
+import "./autoAssignRiderCron.js";
+
 
 // Connect DB - Handled by middleware in app.js for serverless compatibility
-// await connectDB()
+await connectDB()
 
 // Register routes
 app.use("/api/payment", paymentRoutes)
@@ -23,4 +25,4 @@ initSocket(server);
 
 
 // Export app for Vercel
-export default app;
+export default app; 
