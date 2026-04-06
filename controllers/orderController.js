@@ -4,12 +4,18 @@ import Cart from "../models/Cart.js";
 import Product from "../models/Product.js";
 import AppUser from "../models/AppUser.js";
 import Subscription from "../models/Subscription.js";
-import Rider from "../models/Rider.js";
 import * as walletService from "../services/walletService.js";
 import { emitOrderUpdate } from "../services/socketService.js";
 import { createNotification } from "../services/notificationService.js";
 import { getCurrentCommissionRate } from "./commissionController.js";
 
+// Helper: Sleep function for delays if needed
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Main Order Placement Logic
+ * Handles: Cart Checkout AND Direct Body Items (Flutter App)
+ */
 export const placeOrder = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -18,22 +24,22 @@ export const placeOrder = async (req, res) => {
         const userId = req.userId;
         let { deliveryAddress, paymentMethod, orderType, items: bodyItems } = req.body;
 
-        // 1. Fetch Items (Target Source: req.body.items OR Cart DB)
+        // 1. Fetch Items (Source: req.body.items OR Cart DB)
         let cartItems = [];
         let identifiedRetailer = null;
 
         if (bodyItems && bodyItems.length > 0) {
-            // Option A: Use items directly from the Request Body (Flutter Dev style)
+            // Option A: Use items directly from Request Body
             for (const item of bodyItems) {
                 const product = await Product.findById(item.product).session(session);
                 if (!product) throw new Error(`Product not found: ${item.product}`);
-
+                
                 cartItems.push({
                     product: product,
                     quantity: item.quantity,
-                    retailer: product.retailer // Security: always use retailer from DB product
+                    retailer: product.retailer 
                 });
-
+                
                 if (!identifiedRetailer) identifiedRetailer = product.retailer;
             }
         } else {
@@ -98,7 +104,6 @@ export const placeOrder = async (req, res) => {
                 throw new Error(`Insufficient wallet balance. Total: ₹${totalAmount}, Current: ₹${user?.walletBalance || 0}`);
             }
 
-            // Deduct from wallet WITHIN the session
             await walletService.adjustBalance(userId, "appUser", totalAmount, "Debit", "Order Payment", "Order", null, session);
         }
 
@@ -106,9 +111,9 @@ export const placeOrder = async (req, res) => {
         const commissionRate = await getCurrentCommissionRate();
         const commissionAmount = parseFloat(((totalAmount * commissionRate) / 100).toFixed(2));
 
-        // 5. Generate Order ID & Create Order
+        // 5. Create Order
         const orderId = `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
-        const order = await Order.create([{
+        const orderResults = await Order.create([{
             orderId,
             user: userId,
             items: orderItems,
@@ -118,65 +123,19 @@ export const placeOrder = async (req, res) => {
             paymentStatus: paymentMethod === "Wallet" ? "Paid" : "Pending",
             orderType: orderType || "One-time",
             commissionRate,
-            commissionAmount
+            commissionAmount,
+            statusHistory: [{ status: "Pending", changedBy: userId, role: 'user', timestamp: new Date() }]
         }], { session });
 
-        const createdOrder = order[0];
+        const createdOrder = orderResults[0];
 
         // 6. Update Stock
         for (const item of cartItems) {
-            const updatedProduct = await Product.findByIdAndUpdate(
+            await Product.findByIdAndUpdate(
                 item.product._id,
                 { $inc: { stock: -item.quantity } },
-                { new: true, session }
+                { session }
             );
-
-            try {
-                // --- STEP 1: ACCEPTED ---
-                order.status = "Accepted";
-                order.statusHistory = order.statusHistory || [];
-                order.statusHistory.push({ status: "Accepted", changedBy: retailerId, role: 'system', timestamp: new Date() });
-                await order.save();
-
-                emitOrderUpdate(order.orderId, "Accepted", {
-                    orderId: order.orderId,
-                    status: "Accepted",
-                    statusHistory: order.statusHistory
-                }, retailerId, userId);
-
-                await sleep(3000); // 3 Second Gap
-
-                // --- STEP 2: PROCESSING ---
-                order.status = "Processing";
-                order.statusHistory.push({ status: "Processing", changedBy: retailerId, role: 'system', timestamp: new Date() });
-                await order.save();
-
-                emitOrderUpdate(order.orderId, "Processing", {
-                    orderId: order.orderId,
-                    status: "Processing",
-                    statusHistory: order.statusHistory
-                }, retailerId, userId);
-
-                await sleep(3000); // 3 Second Gap
-
-                // --- STEP 3: RIDER ASSIGNED ---
-                order.rider = riderUserId;
-                order.riderAssignmentStatus = "Pending";
-                order.status = "Rider Assigned";
-                order.statusHistory.push({ status: "Rider Assigned", changedBy: retailerId, role: 'system', timestamp: new Date() });
-                await order.save();
-
-                emitOrderUpdate(order.orderId, "Rider Assigned", {
-                    orderId: order.orderId,
-                    status: "Rider Assigned",
-                    riderName,
-                    statusHistory: order.statusHistory
-                }, retailerId, userId);
-
-                console.log(`✅ Gradual auto-process complete for Order: ${order.orderId}`);
-            } catch (err) {
-                console.error(`❌ Gradual process failed for order ${order.orderId}:`, err);
-            }
         }
 
         // 7. Clear Cart if it was used
@@ -184,10 +143,9 @@ export const placeOrder = async (req, res) => {
             await Cart.findOneAndDelete({ user: userId }, { session });
         }
 
-        // COMMIT TRANSACTION
         await session.commitTransaction();
 
-        // 8. Background Tasks (Sockets & Notifications)
+        // 8. Background Sockets & Notifications
         await emitOrderUpdate(createdOrder.orderId, "Pending", createdOrder, identifiedRetailer, userId);
         createNotification(identifiedRetailer.toString(), {
             title: "New Order Received! 🦐",
@@ -203,38 +161,27 @@ export const placeOrder = async (req, res) => {
         });
 
     } catch (error) {
-        if (session.inTransaction()) {
+        if (session && session.inTransaction()) {
             await session.abortTransaction();
         }
         res.status(500).json({ success: false, message: error.message });
     } finally {
-        session.endSession();
+        if (session) session.endSession();
     }
 };
 
-// --- APP USER ACTIONS ---
-
-export const placeOrder = async (req, res) => {
+export const getMyOrders = async (req, res) => {
     try {
-        const { items, totalAmount, deliveryAddress, paymentMethod } = req.body;
-        const orderId = `ORD-${Date.now()}`;
-        const commissionRate = await getCurrentCommissionRate();
-        const commissionAmount = parseFloat(((totalAmount * commissionRate) / 100).toFixed(2));
-        const order = await Order.create({
-            orderId, user: req.user._id, items, totalAmount, deliveryAddress, paymentMethod,
-            commissionRate, commissionAmount,
-            statusHistory: [{ status: "Pending", changedBy: req.user._id, role: 'user', timestamp: new Date() }]
+        const orders = await Order.find({ user: req.userId })
+            .populate("items.product")
+            .populate("items.retailer", "businessDetails")
+            .populate("rider", "name phone")
+            .sort({ createdAt: -1 });
+
+        res.status(200).json({
+            success: true,
+            orders
         });
-        await Cart.deleteOne({ user: req.user._id });
-        res.status(201).json({ success: true, data: order });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-};
-
-export const placeSpotOrder = async (req, res) => {
-    try {
-        res.status(201).json({ success: true, message: "Spot order feature active" });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -242,11 +189,25 @@ export const placeSpotOrder = async (req, res) => {
 
 export const getUserOrderHistory = async (req, res) => {
     try {
-        const orders = await Order.find({ user: req.user._id })
-            .populate("items.product", "name image price")
-            .populate("rider", "name")
+        const userId = req.userId;
+        const orders = await Order.find({ user: userId })
+            .populate("items.product")
+            .populate("items.retailer", "businessDetails")
+            .populate("rider", "name phone")
             .sort({ createdAt: -1 });
-        res.status(200).json({ success: true, data: orders });
+
+        const subscriptions = await Subscription.find({ user: userId })
+            .populate("product")
+            .populate("retailer", "businessDetails")
+            .sort({ createdAt: -1 });
+
+        res.status(200).json({
+            success: true,
+            data: {
+                orders: orders,
+                activePlans: subscriptions
+            }
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -254,38 +215,46 @@ export const getUserOrderHistory = async (req, res) => {
 
 export const getOrderTracking = async (req, res) => {
     try {
-        const id = req.params.id || req.params.orderId;
-
-        // Find by MongoDB _id if valid, otherwise fallback to custom orderId
-        let query = { orderId: id };
-        if (mongoose.Types.ObjectId.isValid(id)) {
-            query = { $or: [{ _id: id }, { orderId: id }] };
+        const orderId = req.params.id;
+        let query = { orderId: orderId };
+        
+        if (mongoose.Types.ObjectId.isValid(orderId)) {
+            query = { $or: [{ _id: orderId }, { orderId: orderId }] };
         }
 
         const order = await Order.findOne(query)
-            .populate("items.product", "name image price")
-            .populate("rider", "name phone status");
+            .populate("items.product")
+            .populate("items.retailer", "businessDetails")
+            .populate("rider", "name phone")
+            .populate("subscriptionId");
 
-        if (!order) return res.status(404).json({ success: false, message: "Not found" });
-        res.status(200).json({ success: true, data: order });
+        if (!order) {
+            return res.status(404).json({ success: false, message: "Order not found" });
+        }
+
+        res.status(200).json({
+            success: true,
+            order
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-export const getMyOrders = getUserOrderHistory;
-export const getOrderById = getOrderTracking;
-export const createOrder = placeOrder;
-export const getUserOrders = getUserOrderHistory;
+export const placeSpotOrder = async (req, res) => {
+    return placeOrder(req, res);
+};
 
 export const updateOrderStatus = async (req, res) => {
     try {
         const { orderId, status } = req.body;
         const order = await Order.findOne({ orderId });
         if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+        
         order.status = status;
-        order.statusHistory.push({ status, changedBy: req.user._id, role: 'system', timestamp: new Date() });
+        order.statusHistory.push({ status, changedBy: req.userId, role: 'system', timestamp: new Date() });
         await order.save();
+        
         res.status(200).json({ success: true, data: order });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
