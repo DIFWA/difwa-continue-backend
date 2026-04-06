@@ -293,12 +293,36 @@ export const handleBulkOrders = async (req, res) => {
             return res.status(400).json({ success: false, message: `Invalid status. Must be one of: ${validStatuses.join(", ")}` });
         }
 
+        // ─── Find Best Rider (Lightest Load) ───
+        let bestRiderId = null;
+        if (status === "Accepted") {
+            const RiderModel = (await import("../models/Rider.js")).default;
+            const onlineRiders = await RiderModel.find({ 
+                retailer: retailerId, 
+                status: { $ne: "Offline" } 
+            });
+
+            if (onlineRiders.length > 0) {
+                // Count current active orders for each online rider
+                const riderWorkloads = await Promise.all(onlineRiders.map(async (r) => {
+                    const count = await Order.countDocuments({ 
+                        rider: r.user, 
+                        status: { $in: ["Accepted", "Rider Accepted", "Processing", "Preparing", "Shipped", "Out for Delivery"] } 
+                    });
+                    return { riderId: r.user, count };
+                }));
+
+                // Sort by count and pick the lowest
+                riderWorkloads.sort((a, b) => a.count - b.count);
+                bestRiderId = riderWorkloads[0].riderId;
+            }
+        }
+
         const results = [];
         const errors = [];
 
         for (const orderId of orderIds) {
             try {
-                // Support both MongoDB _id and custom orderId
                 let query = { orderId };
                 if (mongoose.Types.ObjectId.isValid(orderId)) {
                     query = { $or: [{ _id: orderId }, { orderId }] };
@@ -310,10 +334,23 @@ export const handleBulkOrders = async (req, res) => {
                     continue;
                 }
 
-                order.status = status;
+                // Auto-Assignment if rider found
+                if (status === "Accepted" && bestRiderId) {
+                    order.status = "Rider Assigned";
+                    order.rider = bestRiderId;
+                    order.statusHistory.push({
+                        status: "Rider Assigned",
+                        changedBy: retailerId,
+                        role: "retailer",
+                        timestamp: new Date()
+                    });
+                } else {
+                    order.status = status;
+                }
+
                 order.statusHistory = order.statusHistory || [];
                 order.statusHistory.push({
-                    status,
+                    status: order.status,
                     changedBy: retailerId,
                     role: "retailer",
                     timestamp: new Date()
@@ -321,13 +358,14 @@ export const handleBulkOrders = async (req, res) => {
                 await order.save();
 
                 // Emit real-time update
-                emitOrderUpdate(order.orderId, status, {
+                emitOrderUpdate(order.orderId, order.status, {
                     orderId: order.orderId,
-                    status,
-                    statusHistory: order.statusHistory
+                    status: order.status,
+                    statusHistory: order.statusHistory,
+                    rider: order.rider
                 }, retailerId, order.user?.toString());
 
-                results.push({ orderId: order.orderId, status });
+                results.push({ orderId: order.orderId, status: order.status });
             } catch (err) {
                 errors.push({ orderId, message: err.message });
             }

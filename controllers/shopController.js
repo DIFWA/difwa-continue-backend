@@ -243,21 +243,46 @@ export const createManualOrder = async (req, res) => {
 export const getRetailerOrders = async (req, res) => {
     try {
         const retailerId = req.user._id;
-        const { customerId } = req.query;
+        const { customerId, page = 1, limit = 10 } = req.query;
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        
         const query = { "items.retailer": retailerId };
         if (customerId) query.user = customerId;
 
+        // Get total count for pagination
+        const totalItemsCount = await Order.countDocuments(query);
+        const totalPages = Math.ceil(totalItemsCount / parseInt(limit));
+
         const orders = await Order.find(query)
             .populate("items.product", "name")
-            .populate("rider", "name") // Order model refers to User, which has 'name'
-            .sort({ createdAt: -1 });
+            .populate("rider", "name")
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(parseInt(limit));
 
-        const formattedOrders = [];
+        // Get overall stats (including non-paginated status counts)
+        const allOrdersForStats = await Order.find(query).select("status totalAmount items");
         let pendingOrders = 0;
         let completedOrders = 0;
         let totalRevenue = 0;
 
-        orders.forEach(order => {
+        allOrdersForStats.forEach(order => {
+            let retailerOrderTotal = 0;
+            const retailerItems = order.items.filter(item => item.retailer && item.retailer.toString() === retailerId.toString());
+            retailerItems.forEach(item => {
+                retailerOrderTotal += (item.price || 0) * (item.quantity || 0);
+            });
+            totalRevenue += retailerOrderTotal;
+            
+            const status = order.status;
+            if (['Pending', 'Accepted', 'Processing', 'Preparing', 'Shipped', 'Out for Delivery', 'Rider Assigned', 'Rider Accepted'].includes(status)) {
+                pendingOrders++;
+            } else if (status === 'Delivered' || status === 'Completed') {
+                completedOrders++;
+            }
+        });
+
+        const formattedOrders = orders.map(order => {
             let retailerOrderTotal = 0;
             let productNames = [];
             const retailerItems = order.items.filter(item => item.retailer && item.retailer.toString() === retailerId.toString());
@@ -267,16 +292,9 @@ export const getRetailerOrders = async (req, res) => {
                 productNames.push(`${item.quantity}x ${item.product?.name || 'Unknown'}`);
             });
 
-            totalRevenue += retailerOrderTotal;
             const status = order.status;
 
-            if (['Pending', 'Accepted', 'Processing', 'Preparing', 'Shipped', 'Out for Delivery', 'Rider Assigned', 'Rider Accepted'].includes(status)) {
-                pendingOrders++;
-            } else if (status === 'Delivered' || status === 'Completed') {
-                completedOrders++;
-            }
-
-            formattedOrders.push({
+            return {
                 id: order.orderId || `#${order._id.toString().slice(-6).toUpperCase()}`,
                 product: productNames.join(", "),
                 date: new Date(order.createdAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hour12: true }).replace(/\//g, "-"),
@@ -289,19 +307,25 @@ export const getRetailerOrders = async (req, res) => {
                     name: order.rider.name || "Delivery Partner"
                 } : null,
                 statusHistory: order.statusHistory || []
-            });
+            };
         });
 
         res.status(200).json({
             success: true,
             data: {
                 orders: formattedOrders,
+                pagination: {
+                    totalOrders: totalItemsCount,
+                    totalPages,
+                    currentPage: parseInt(page),
+                    limit: parseInt(limit)
+                },
                 stats: {
-                    totalOrders: orders.length,
+                    totalOrders: totalItemsCount,
                     pendingOrders,
                     completedOrders,
                     totalRevenue: totalRevenue.toFixed(2),
-                    avgOrderValue: orders.length > 0 ? (totalRevenue / orders.length).toFixed(2) : "0"
+                    avgOrderValue: totalItemsCount > 0 ? (totalRevenue / totalItemsCount).toFixed(2) : "0"
                 }
             }
         });
