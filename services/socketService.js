@@ -255,3 +255,31 @@ export const emitShopStatusUpdate = (shopId, isShopActive) => {
         }).catch(err => console.error("Relay shop status update failed:", err.message));
     }
 };
+
+// ─── Product Update Emitter ───────────────────────────────────────────────────
+export const emitProductUpdate = (action, product, retailerId) => {
+    if (!retailerId) return;
+
+    const room = `retailer_${retailerId.toString()}`;
+    const payload = { action, product }; // action: 'created' | 'updated' | 'deleted'
+
+    _log(`Emitting productUpdate [${action}]`, { data: { room, productId: product?._id } });
+
+    if (io) {
+        io.to(room).emit("productUpdate", payload);
+    }
+
+    const relayUrl = process.env.SOCKET_RELAY_URL;
+    if (relayUrl) {
+        fetch(`${relayUrl}/emit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                secret: process.env.SOCKET_SECRET || "shrimpbite_socket_relay_secret_2026",
+                event: "productUpdate",
+                room,
+                data: payload
+            })
+        }).catch(err => console.error("Relay productUpdate emit failed:", err.message));
+    }
+};

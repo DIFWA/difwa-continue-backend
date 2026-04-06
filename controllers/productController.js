@@ -1,5 +1,6 @@
 import Product from "../models/Product.js";
 import { createNotification } from "../services/notificationService.js";
+import { emitProductUpdate } from "../services/socketService.js";
 
 // Get all products for the logged-in retailer
 export const getRetailerProducts = async (req, res) => {
@@ -35,6 +36,8 @@ export const createProduct = async (req, res) => {
             retailer: req.user._id
         };
         const product = await Product.create(productData);
+        // Emit real-time update to retailer's room
+        emitProductUpdate("created", product, req.user._id);
         res.status(201).json({ success: true, data: product });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -49,8 +52,10 @@ export const updateProduct = async (req, res) => {
             { _id: id, retailer: req.user._id },
             req.body,
             { new: true, runValidators: true }
-        );
+        ).populate("category", "name");
         if (!product) return res.status(404).json({ success: false, message: "Product not found" });
+        // Emit real-time update to retailer's room
+        emitProductUpdate("updated", product, req.user._id);
         res.status(200).json({ success: true, data: product });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -63,6 +68,8 @@ export const deleteProduct = async (req, res) => {
         const { id } = req.params;
         const product = await Product.findOneAndDelete({ _id: id, retailer: req.user._id });
         if (!product) return res.status(404).json({ success: false, message: "Product not found" });
+        // Emit real-time update to retailer's room
+        emitProductUpdate("deleted", { _id: id }, req.user._id);
         res.status(200).json({ success: true, message: "Product deleted successfully" });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
