@@ -22,6 +22,10 @@ import favoriteRoutes from "./routes/favoriteRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import searchRoutes from "./routes/searchRoutes.js";
 import commissionRoutes from "./routes/commissionRoutes.js";
+import appSupportRoutes from "./routes/appSupportRoutes.js";
+import appNotificationRoutes from "./routes/appNotificationRoutes.js";
+import faqRoutes from "./routes/faqRoutes.js";
+import Faq from "./models/Faq.js";
 const app = express()
 
 
@@ -102,7 +106,31 @@ app.use("/app/favorites", favoriteRoutes);
 app.use("/api/app/search", searchRoutes);
 app.use("/app/search", searchRoutes);
 
+app.use("/api/app/support", appSupportRoutes);
+app.use("/api/app/notifications", appNotificationRoutes);
+app.use("/api/faq", faqRoutes);
+
 app.use("/api/commission", commissionRoutes);
+
+// Seed Check
+const seedIfEmpty = async () => {
+    try {
+        const count = await Faq.countDocuments();
+        if (count === 0) {
+            const initialFaqs = [
+                { question: "How do I pause my subscription?", answer: "Go to the 'Daily' or 'Subscriptions' tab, tap on 'Pause Tomorrow' or enable 'Vacation Mode' for a range of dates.", order: 1 },
+                { question: "What is the cutoff time for changes?", answer: "All changes to your subscription (pausing, resuming, or modifying) must be done before 8:00 PM for the next day's delivery.", order: 2 },
+                { question: "How do I add money to my wallet?", answer: "Open 'My Wallet' from the profile or home screen, tap 'Add Money', enter the amount, and complete the payment via Razorpay.", order: 3 },
+                { question: "Can I cancel an order?", answer: "Orders can only be cancelled before they are in 'Processing' status.", order: 4 },
+                { question: "My delivery is late, whom should I contact?", answer: "Use the 'Contact Us' form to reach admin.", order: 5 },
+                { question: "Is the water tested and pure?", answer: "Yes, all our partner water plants are certified.", order: 6 }
+            ];
+            await Faq.insertMany(initialFaqs);
+            console.log("✅ FAQs seeded automatically");
+        }
+    } catch (err) { }
+};
+seedIfEmpty();
 
 // Basic test route
 app.get("/", (req, res) => {

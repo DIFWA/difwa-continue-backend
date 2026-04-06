@@ -13,8 +13,12 @@ import { updateRetailerProfile } from "../controllers/authController.js";
 import { toggleShopStatus, finalizeOrderWeight, getRetailerDashboardStats, getRetailerCustomers, addManualCustomer, createManualOrder, settleCustomerDue, getDueOrdersForCustomer, createManualSubscription, getRetailerSubscriptions, getRetailerRevenueStats, getRetailerOrders, getRetailerReviews, updateOrderItemStatus, assignRiderToOrder } from "../controllers/shopController.js";
 import { searchAnything } from "../controllers/retailerSearchController.js";
 import { getDailyPrepList } from "../services/prepService.js";
+import { handleBulkOrders } from "../controllers/orderController.js";
 
 const router = express.Router();
+
+// Bulk Order Processing
+router.post("/orders/bulk-process", protect, retailerOnly, handleBulkOrders);
 
 // Dashboard Stats
 router.get("/dashboard-stats", protect, retailerOnly, getRetailerDashboardStats);

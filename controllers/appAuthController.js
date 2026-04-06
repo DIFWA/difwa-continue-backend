@@ -66,6 +66,7 @@ export const sendOtp = async (req, res) => {
         return res.status(200).json({
             message: "OTP sent successfully",
             success: true,
+            otp: otp, // Simplified for development flow
             data: { otp: otp },
         });
 
@@ -174,11 +175,11 @@ export const registerUser = async (req, res) => {
 
         console.log(fcmToken, " this is my fcmToken")
 
-        if (!fullName || !phoneNumber || !password || !confirmPassword || !fcmToken) {
-            return res.status(400).json({ success: false, message: "All required fields must be filled" });
+        if (!fullName || !phoneNumber || !fcmToken) {
+            return res.status(400).json({ success: false, message: "Name, phone, and fcmToken are required" });
         }
 
-        if (password !== confirmPassword) {
+        if (password && password !== confirmPassword) {
             return res.status(400).json({ success: false, message: "Passwords do not match" });
         }
 
@@ -191,7 +192,7 @@ export const registerUser = async (req, res) => {
         }
 
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedPassword = password ? await bcrypt.hash(password, 10) : null;
 
         const newUser = await AppUser.create({
             fullName,
@@ -504,10 +505,16 @@ export const addAddress = async (req, res) => {
         const user = await AppUser.findById(req.user._id);
         if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
-        const { address, fullName } = req.body;
+        // The Flutter app sends address fields flat in the body, but some clients might send nested 'address'
+        const addressData = req.body.address || req.body;
+        const fullName = req.body.fullName;
+
+        if (!addressData || (!addressData.fullAddress && !addressData.pincode)) {
+            return res.status(400).json({ success: false, message: "Invalid address data provided" });
+        }
 
         // If isDefault is true, unset previous defaults
-        if (address.isDefault) {
+        if (addressData.isDefault) {
             user.addresses = user.addresses.map(a => ({ ...a.toObject(), isDefault: false }));
         }
 
@@ -515,13 +522,13 @@ export const addAddress = async (req, res) => {
             user.fullName = fullName;
         }
 
-        user.addresses.push(address);
+        user.addresses.push(addressData);
         await user.save();
 
         return res.status(201).json({ success: true, message: "Address added", data: user.addresses });
     } catch (error) {
         console.error("addAddress error:", error);
-        return res.status(500).json({ success: false, message: "Server error" });
+        return res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
 

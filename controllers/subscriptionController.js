@@ -1,7 +1,7 @@
 import Subscription from "../models/Subscription.js";
 import Product from "../models/Product.js";
 import SubscriptionPlan from "../models/SubscriptionPlan.js";
-import { createSubscription as createSubService } from "../services/subscriptionService.js";
+import { createSubscription as createSubService, generateDailyOrders } from "../services/subscriptionService.js";
 
 export const subscribeToProduct = async (req, res) => {
     try {
@@ -69,6 +69,23 @@ export const updateVacation = async (req, res) => {
         const start = new Date(startDate);
         const end = new Date(endDate);
 
+        // 8 PM Cut-off Logic for tomorrow
+        const now = new Date();
+        const cutoffHour = 23; // 11 PM for testing. Change to 20 for 8 PM in production.
+        const isPastCutoff = now.getHours() >= cutoffHour;
+
+        const tomorrow = new Date();
+        tomorrow.setDate(now.getDate() + 1);
+        tomorrow.setHours(0, 0, 0, 0);
+
+        if (isPastCutoff && start.getFullYear() === tomorrow.getFullYear() &&
+            start.getMonth() === tomorrow.getMonth() && start.getDate() === tomorrow.getDate()) {
+            return res.status(400).json({
+                success: false,
+                message: "Deadline passed (11 PM). You cannot pause or start vacation for tomorrow's delivery now."
+            });
+        }
+
         const dates = [];
         let current = new Date(start);
         while (current <= end) {
@@ -76,9 +93,21 @@ export const updateVacation = async (req, res) => {
             current.setDate(current.getDate() + 1);
         }
 
+        let update;
+        const nowDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        if (start < nowDay && end < nowDay) {
+            update = { $set: { vacationDates: [] } };
+        } else if (startDate === endDate) {
+            const sub = await Subscription.findOne({ _id: subscriptionId, user: req.userId });
+            const exists = (sub.vacationDates || []).some(d => d.toISOString() === start.toISOString());
+            update = exists ? { $pull: { vacationDates: start } } : { $addToSet: { vacationDates: start } };
+        } else {
+            update = { $set: { vacationDates: dates } };
+        }
+
         const subscription = await Subscription.findOneAndUpdate(
             { _id: subscriptionId, user: req.userId },
-            { $addToSet: { vacationDates: { $each: dates } } },
+            update,
             { new: true }
         );
 
@@ -99,6 +128,13 @@ export const updateVacation = async (req, res) => {
 export const updateSubscriptionStatus = async (req, res) => {
     try {
         const { subscriptionId, status } = req.body;
+
+        const now = new Date();
+        const cutoffHour = 23; // 11 PM for testing. Change to 20 for 8 PM in production.
+        if (now.getHours() >= cutoffHour && status === 'Paused') {
+
+        }
+
         const subscription = await Subscription.findOneAndUpdate(
             { _id: subscriptionId, user: req.userId },
             { status },
@@ -161,6 +197,19 @@ export const deleteSubscriptionPlan = async (req, res) => {
         const plan = await SubscriptionPlan.findByIdAndDelete(req.params.id);
         if (!plan) return res.status(404).json({ success: false, message: "Plan not found" });
         res.status(200).json({ success: true, message: "Plan deleted successfully" });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const triggerDailyOrders = async (req, res) => {
+    try {
+        const stats = await generateDailyOrders();
+        res.status(200).json({
+            success: true,
+            message: "Daily subscription orders triggered manually",
+            stats
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

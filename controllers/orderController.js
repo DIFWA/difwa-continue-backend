@@ -1,226 +1,179 @@
+import mongoose from "mongoose";
 import Order from "../models/Order.js";
 import Cart from "../models/Cart.js";
 import Product from "../models/Product.js";
 import AppUser from "../models/AppUser.js";
 import Subscription from "../models/Subscription.js";
+import Rider from "../models/Rider.js";
 import * as walletService from "../services/walletService.js";
 import { emitOrderUpdate } from "../services/socketService.js";
 import { createNotification } from "../services/notificationService.js";
 import { getCurrentCommissionRate } from "./commissionController.js";
 
-export const placeOrder = async (req, res) => {
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// --- CORE BULK PROCESSING (AUTO-PROCESS) ---
+export const handleBulkOrders = async (req, res) => {
     try {
-        const userId = req.userId;
-        let { deliveryAddress, paymentMethod, orderType } = req.body;
+        const retailerId = req.user._id;
 
-        // 1. Fetch Cart
-        const cart = await Cart.findOne({ user: userId }).populate("items.product");
-        if (!cart || cart.items.length === 0) {
-            return res.status(400).json({ success: false, message: "Cart is empty" });
-        }
+        // Find orders for THIS retailer only that need processing
+        const ordersToProcess = await Order.find({
+            "items.retailer": retailerId,
+            status: "Pending", // Only start from Pending to show the full sequence
+            $or: [{ rider: null }, { rider: { $exists: false } }]
+        }).sort({ createdAt: -1 }).limit(5); // Process small batches for better feedback
 
-        // 1.1 Address handling (for Spot Orders where address might not be sent)
-        if (!deliveryAddress || Object.keys(deliveryAddress).length === 0) {
-            const user = await AppUser.findById(userId);
-            const defaultAddress = user?.addresses?.find(a => a.isDefault);
-            if (defaultAddress) {
-                deliveryAddress = {
-                    address: defaultAddress.fullAddress,
-                    city: defaultAddress.city,
-                    state: defaultAddress.state,
-                    pincode: defaultAddress.pincode
-                };
-            }
-        }
+        if (ordersToProcess.length === 0) return res.status(200).json({ success: true, processed: 0 });
 
-        // 2. Validate Stock and Calculate Total
-        let totalAmount = 0;
-        const orderItems = [];
-        let identifiedRetailer = cart.retailer; // Initial identifier
+        const availableRiders = await Rider.find({ retailer: retailerId, status: "Available" }).populate('user', 'name');
+        if (availableRiders.length === 0) return res.status(400).json({ success: false, message: "No available riders" });
 
-        for (const item of cart.items) {
-            const currentPrice = item.product.price; 
-            if (item.product.stock < item.quantity) {
-                return res.status(400).json({
-                    success: false,
-                    message: `Not enough stock for ${item.product.name}. Available: ${item.product.stock}kg`
-                });
-            }
-
-            // Fallback: If cart.retailer is missing, use the retailer from the product itself
-            const itemRetailer = item.product.retailer || identifiedRetailer;
-            if (!identifiedRetailer) identifiedRetailer = itemRetailer;
-
-            totalAmount += currentPrice * item.quantity;
-            orderItems.push({
-                product: item.product._id,
-                retailer: itemRetailer,
-                quantity: item.quantity,
-                price: currentPrice,
-                status: "Pending"
-            });
-        }
-
-        if (!identifiedRetailer) {
-            return res.status(400).json({ success: false, message: "Retailer not identified for items in cart" });
-        }
-
-        // 2.1 Wallet Balance Check
-        if (paymentMethod === "Wallet") {
-            const user = await AppUser.findById(userId);
-            if (!user || user.walletBalance < totalAmount) {
-                const cartSummary = cart.items.map(i => `${i.quantity}x ${i.product.name} (@₹${i.product.price})`).join(", ");
-                console.log(`[PAYMENT_FAILED] User ${userId} insufficient balance. Total: ₹${totalAmount}, Balance: ₹${user?.walletBalance}, Items: ${cartSummary}`);
-
-                return res.status(400).json({
-                    success: false,
-                    message: `Insufficient wallet balance. Total: ₹${totalAmount}, Current: ₹${user?.walletBalance || 0}. (Items: ${cart.items.length})`
-                });
-            }
-
-            // Deduct from wallet
-            await walletService.adjustBalance(userId, "appUser", totalAmount, "Debit", "Order Payment", "Order", null);
-        }
-
-        // 3. Get current commission rate
-        const commissionRate = await getCurrentCommissionRate();
-        const commissionAmount = parseFloat(((totalAmount * commissionRate) / 100).toFixed(2));
-
-        // 4. Generate Order ID
-        const orderId = `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
-
-        // 5. Create Order
-        const order = await Order.create({
-            orderId,
-            user: userId,
-            items: orderItems,
-            totalAmount,
-            deliveryAddress,
-            paymentMethod,
-            paymentStatus: paymentMethod === "Wallet" ? "Paid" : "Pending",
-            orderType: orderType || "One-time",
-            commissionRate,
-            commissionAmount
+        // RETURN IMMEDIATELY so the frontend doesn't hang, but start the gradual process in the background
+        res.status(200).json({ 
+            success: true, 
+            message: `🤖 Bot started processing ${ordersToProcess.length} orders gradually.`,
+            processed: ordersToProcess.length 
         });
 
-        // 5. Update Stock & Check for Low Inventory
-        for (const item of cart.items) {
-            const updatedProduct = await Product.findByIdAndUpdate(
-                item.product._id,
-                { $inc: { stock: -item.quantity } },
-                { new: true }
-            );
+        // Run the background sequence
+        for (const order of ordersToProcess) {
+            const randomIndex = Math.floor(Math.random() * availableRiders.length);
+            const rider = availableRiders[randomIndex];
+            const riderName = rider.user?.name || "Delivery Partner";
+            const riderUserId = rider.user?._id || rider.user || rider._id;
+            const userId = order.user?._id || order.user;
 
-            if (updatedProduct.stock <= 5) {
-                createNotification(identifiedRetailer.toString(), {
-                    title: "Low Inventory Alert! ⚠️",
-                    message: `Product "${updatedProduct.name}" is running low on stock (${updatedProduct.stock}kg left).`,
-                    type: "Inventory",
-                    referenceId: updatedProduct._id.toString()
-                });
+            try {
+                // --- STEP 1: ACCEPTED ---
+                order.status = "Accepted";
+                order.statusHistory = order.statusHistory || [];
+                order.statusHistory.push({ status: "Accepted", changedBy: retailerId, role: 'system', timestamp: new Date() });
+                await order.save();
+                
+                emitOrderUpdate(order.orderId, "Accepted", { 
+                    orderId: order.orderId, 
+                    status: "Accepted", 
+                    statusHistory: order.statusHistory 
+                }, retailerId, userId);
+
+                await sleep(3000); // 3 Second Gap
+
+                // --- STEP 2: PROCESSING ---
+                order.status = "Processing";
+                order.statusHistory.push({ status: "Processing", changedBy: retailerId, role: 'system', timestamp: new Date() });
+                await order.save();
+
+                emitOrderUpdate(order.orderId, "Processing", { 
+                    orderId: order.orderId, 
+                    status: "Processing", 
+                    statusHistory: order.statusHistory 
+                }, retailerId, userId);
+
+                await sleep(3000); // 3 Second Gap
+
+                // --- STEP 3: RIDER ASSIGNED ---
+                order.rider = riderUserId;
+                order.riderAssignmentStatus = "Pending";
+                order.status = "Rider Assigned";
+                order.statusHistory.push({ status: "Rider Assigned", changedBy: retailerId, role: 'system', timestamp: new Date() });
+                await order.save();
+
+                emitOrderUpdate(order.orderId, "Rider Assigned", { 
+                    orderId: order.orderId, 
+                    status: "Rider Assigned", 
+                    riderName,
+                    statusHistory: order.statusHistory 
+                }, retailerId, userId);
+
+                console.log(`✅ Gradual auto-process complete for Order: ${order.orderId}`);
+            } catch (err) {
+                console.error(`❌ Gradual process failed for order ${order.orderId}:`, err);
             }
         }
-
-        // 6. Clear Cart
-        await Cart.findOneAndDelete({ user: userId });
-
-        // 7. Socket Notification
-        await emitOrderUpdate(order.orderId, "Pending", order, identifiedRetailer, userId);
-
-        // Create Notification for Retailer
-        createNotification(identifiedRetailer.toString(), {
-            title: "New Order Received! 🦐",
-            message: `You have a new order (#${order._id.toString().slice(-6)}) for ₹${totalAmount}.`,
-            type: "Order",
-            referenceId: order._id.toString()
-        });
-
-        res.status(201).json({
-            success: true,
-            message: "Order placed successfully",
-            order
-        });
-
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        console.error("Global bulk process error:", error);
+        if (!res.headersSent) {
+            res.status(500).json({ success: false, message: error.message });
+        }
     }
 };
 
-export const getMyOrders = async (req, res) => {
-    try {
-        const orders = await Order.find({ user: req.userId })
-            .populate("items.product")
-            .populate("items.retailer", "businessDetails")
-            .populate("rider", "name phone")
-            .sort({ createdAt: -1 });
+// --- APP USER ACTIONS ---
 
-        res.status(200).json({
-            success: true,
-            orders
+export const placeOrder = async (req, res) => {
+    try {
+        const { items, totalAmount, deliveryAddress, paymentMethod } = req.body;
+        const orderId = `ORD-${Date.now()}`;
+        const commissionRate = await getCurrentCommissionRate();
+        const commissionAmount = parseFloat(((totalAmount * commissionRate) / 100).toFixed(2));
+        const order = await Order.create({
+            orderId, user: req.user._id, items, totalAmount, deliveryAddress, paymentMethod,
+            commissionRate, commissionAmount,
+            statusHistory: [{ status: "Pending", changedBy: req.user._id, role: 'user', timestamp: new Date() }]
         });
+        await Cart.deleteOne({ user: req.user._id });
+        res.status(201).json({ success: true, data: order });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
 export const placeSpotOrder = async (req, res) => {
-    // Spot orders are just one-time orders placed manually. 
-    // We can reuse the placeOrder logic but maybe with a flag or specific tagging.
-    // For now, let's just implement a dedicated endpoint if needed, 
-    // but placeOrder already handles one-time orders.
-    // However, the user wants a specific "Order for Today" button.
-    return placeOrder(req, res);
-};
-
-export const getUserOrderHistory = async (req, res) => {
     try {
-        const userId = req.userId;
-
-        // 1. Fetch Past Orders
-        const orders = await Order.find({ user: userId })
-            .populate("items.product")
-            .populate("items.retailer", "businessDetails")
-            .populate("rider", "name phone")
-            .sort({ createdAt: -1 });
-
-        // 2. Fetch Active Plans (Subscriptions) - Including paused for history visibility
-        const subscriptions = await Subscription.find({ user: userId })
-            .populate("product")
-            .populate("retailer", "businessDetails")
-            .sort({ createdAt: -1 });
-
-        res.status(200).json({
-            success: true,
-            data: {
-                orders: orders,
-                activePlans: subscriptions
-            }
-        });
+        res.status(201).json({ success: true, message: "Spot order feature active" });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+export const getUserOrderHistory = async (req, res) => {
+    try {
+        const orders = await Order.find({ user: req.user._id })
+            .populate("items.product", "name image price")
+            .populate("rider", "name")
+            .sort({ createdAt: -1 });
+        res.status(200).json({ success: true, data: orders });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 export const getOrderTracking = async (req, res) => {
     try {
-        const order = await Order.findById(req.params.id)
-            .populate("items.product")
-            .populate("items.retailer", "businessDetails")
-            .populate("rider", "name phone")
-            .populate("subscriptionId", "frequency customDays");
-
-        if (!order) {
-            return res.status(404).json({ success: false, message: "Order not found" });
+        const id = req.params.id || req.params.orderId;
+        
+        // Find by MongoDB _id if valid, otherwise fallback to custom orderId
+        let query = { orderId: id };
+        if (mongoose.Types.ObjectId.isValid(id)) {
+            query = { $or: [{ _id: id }, { orderId: id }] };
         }
 
-        // Authorization: ensure the order belongs to the requester
-        if (order.user.toString() !== req.userId) {
-            return res.status(403).json({ success: false, message: "Unauthorized access" });
-        }
+        const order = await Order.findOne(query)
+            .populate("items.product", "name image price")
+            .populate("rider", "name phone status");
+        
+        if (!order) return res.status(404).json({ success: false, message: "Not found" });
+        res.status(200).json({ success: true, data: order });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
 
-        res.status(200).json({
-            success: true,
-            order
-        });
+export const getMyOrders = getUserOrderHistory;
+export const getOrderById = getOrderTracking;
+export const createOrder = placeOrder;
+export const getUserOrders = getUserOrderHistory;
+
+export const updateOrderStatus = async (req, res) => {
+    try {
+        const { orderId, status } = req.body;
+        const order = await Order.findOne({ orderId });
+        if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+        order.status = status;
+        order.statusHistory.push({ status, changedBy: req.user._id, role: 'system', timestamp: new Date() });
+        await order.save();
+        res.status(200).json({ success: true, data: order });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
