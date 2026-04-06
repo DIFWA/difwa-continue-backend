@@ -270,11 +270,18 @@ export const getOrderById = getOrderTracking;
 
 export const handleBulkOrders = async (req, res) => {
     try {
-        const retailerId = req.user?.id || req.user?._id;
-        const { orderIds, status } = req.body;
+        const retailerId = req.user?.id || req.user?._id || req.userId;
+        let { orderIds, status = "Accepted" } = req.body || {};
 
+        // If no specific IDs provided, find all "Pending" orders for this retailer
         if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
-            return res.status(400).json({ success: false, message: "orderIds array is required" });
+            const Order = (await import("../models/Order.js")).default;
+            const pendingOrders = await Order.find({ retailer: retailerId, status: "Pending" }).select("_id");
+            orderIds = pendingOrders.map(o => o._id);
+        }
+
+        if (!orderIds || orderIds.length === 0) {
+            return res.status(200).json({ success: true, message: "No pending orders to process", processed: 0 });
         }
 
         if (!status) {
