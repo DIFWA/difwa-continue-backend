@@ -116,9 +116,12 @@ export const emitOrderUpdate = async (orderId, status, data, retailerId = null, 
 
     const payload = { status, data, orderId };
     
-    // Specifically trigger NEW_ORDER for admins on initial 'Pending' creation
+    // Specifically trigger NEW_ORDER for admins and the specific retailer on initial 'Pending' creation
     if (status === "Pending" && io) {
         io.to("admin").emit("NEW_ORDER", payload);
+        if (retailerId) {
+            io.to(`retailer_${retailerId.toString()}`).emit("NEW_ORDER", payload);
+        }
     }
     
     // 1. Local emit - DO THIS FIRST to ensure immediate local feedback
