@@ -260,3 +260,78 @@ export const updateOrderStatus = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+/**
+ * Bulk process multiple orders for a retailer.
+ * Body: { orderIds: ["id1","id2"], status: "Accepted" }
+ */
+export const handleBulkOrders = async (req, res) => {
+    try {
+        const retailerId = req.user?.id || req.user?._id;
+        const { orderIds, status } = req.body;
+
+        if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+            return res.status(400).json({ success: false, message: "orderIds array is required" });
+        }
+
+        if (!status) {
+            return res.status(400).json({ success: false, message: "status is required" });
+        }
+
+        const validStatuses = ["Accepted", "Processing", "Preparing", "Shipped", "Out for Delivery", "Delivered", "Completed", "Cancelled"];
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({ success: false, message: `Invalid status. Must be one of: ${validStatuses.join(", ")}` });
+        }
+
+        const results = [];
+        const errors = [];
+
+        for (const orderId of orderIds) {
+            try {
+                // Support both MongoDB _id and custom orderId
+                let query = { orderId };
+                if (mongoose.Types.ObjectId.isValid(orderId)) {
+                    query = { $or: [{ _id: orderId }, { orderId }] };
+                }
+
+                const order = await Order.findOne(query);
+                if (!order) {
+                    errors.push({ orderId, message: "Order not found" });
+                    continue;
+                }
+
+                order.status = status;
+                order.statusHistory = order.statusHistory || [];
+                order.statusHistory.push({
+                    status,
+                    changedBy: retailerId,
+                    role: "retailer",
+                    timestamp: new Date()
+                });
+                await order.save();
+
+                // Emit real-time update
+                emitOrderUpdate(order.orderId, status, {
+                    orderId: order.orderId,
+                    status,
+                    statusHistory: order.statusHistory
+                }, retailerId, order.user?.toString());
+
+                results.push({ orderId: order.orderId, status });
+            } catch (err) {
+                errors.push({ orderId, message: err.message });
+            }
+        }
+
+        res.status(200).json({
+            success: true,
+            message: `Bulk processed ${results.length} order(s).`,
+            updated: results,
+            failed: errors
+        });
+
+    } catch (error) {
+        console.error("handleBulkOrders error:", error.message);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
