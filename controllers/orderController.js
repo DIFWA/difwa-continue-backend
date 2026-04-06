@@ -265,6 +265,9 @@ export const updateOrderStatus = async (req, res) => {
  * Bulk process multiple orders for a retailer.
  * Body: { orderIds: ["id1","id2"], status: "Accepted" }
  */
+// Alias: getOrderById is the same as getOrderTracking
+export const getOrderById = getOrderTracking;
+
 export const handleBulkOrders = async (req, res) => {
     try {
         const retailerId = req.user?.id || req.user?._id;
