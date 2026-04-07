@@ -33,7 +33,8 @@ export const getPublicShops = async (req, res) => {
             location: shop.businessDetails?.location?.city || "",
             isShopActive: shop.isShopActive ?? true,
             rating: 4.5, // Placeholder for future rating system
-            deliveryTime: "30-45 mins" // Placeholder
+            deliveryTime: "30-45 mins", // Placeholder
+            deliverySlots: shop.businessDetails?.deliverySlots || []
         }));
 
         res.status(200).json({ success: true, data: minimalShops });
@@ -59,7 +60,8 @@ export const getShopDetails = async (req, res) => {
                 image: shop.businessDetails?.storeImage || "",
                 address: shop.businessDetails?.location,
                 contact: shop.email,
-                isShopActive: shop.isShopActive ?? true
+                isShopActive: shop.isShopActive ?? true,
+                deliverySlots: shop.businessDetails?.deliverySlots || []
             }
         });
     } catch (error) {

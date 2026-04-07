@@ -43,7 +43,8 @@ export const globalSearch = async (req, res) => {
             location: shop.businessDetails?.location?.city || "",
             isShopActive: shop.isShopActive ?? true,
             rating: 4.5,
-            deliveryTime: "30-45 mins"
+            deliveryTime: "30-45 mins",
+            deliverySlots: shop.businessDetails?.deliverySlots || []
         }));
 
         // 2. Search for Products
