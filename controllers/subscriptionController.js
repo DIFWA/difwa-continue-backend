@@ -6,7 +6,8 @@ import { createSubscription as createSubService, generateDailyOrders } from "../
 export const subscribeToProduct = async (req, res) => {
     try {
         const userId = req.userId;
-        const { productId, frequency, customDays, quantity, startDate, endDate, deliverySlot } = req.body;
+        const { productId, frequency, customDays, quantity, startDate, endDate } = req.body;
+        const deliverySlot = req.body.deliverySlot || req.body.deliveryslot;
 
         const product = await Product.findById(productId);
         if (!product) {

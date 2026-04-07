@@ -22,7 +22,8 @@ export const placeOrder = async (req, res) => {
 
     try {
         const userId = req.userId;
-        let { deliveryAddress, paymentMethod, orderType, items: bodyItems, deliverySlot } = req.body;
+        const { deliveryAddress, paymentMethod, orderType, items: bodyItems } = req.body;
+        const deliverySlot = req.body.deliverySlot || req.body.deliveryslot;
 
         // 1. Fetch Items (Source: req.body.items OR Cart DB)
         let cartItems = [];
