@@ -66,6 +66,10 @@ const userSchema = new mongoose.Schema({
             gstCertificateUrl: String
         },
         storeImage: String,
+        deliverySlots: {
+            type: [String],
+            default: []
+        },
         resetPasswordToken: { type: String, default: null },
         resetPasswordExpires: { type: Date, default: null },
         otp: { type: String, default: null },
