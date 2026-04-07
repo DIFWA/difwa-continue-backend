@@ -22,7 +22,7 @@ export const placeOrder = async (req, res) => {
 
     try {
         const userId = req.userId;
-        let { deliveryAddress, paymentMethod, orderType, items: bodyItems } = req.body;
+        let { deliveryAddress, paymentMethod, orderType, items: bodyItems, deliverySlot } = req.body;
 
         // 1. Fetch Items (Source: req.body.items OR Cart DB)
         let cartItems = [];
@@ -120,6 +120,7 @@ export const placeOrder = async (req, res) => {
             totalAmount,
             deliveryAddress,
             paymentMethod,
+            deliverySlot: deliverySlot || null,
             paymentStatus: paymentMethod === "Wallet" ? "Paid" : "Pending",
             orderType: orderType || "One-time",
             commissionRate,
