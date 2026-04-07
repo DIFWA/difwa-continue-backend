@@ -372,11 +372,17 @@ export const createManualOrder = async (req, res) => {
 export const getRetailerOrders = async (req, res) => {
     try {
         const retailerId = req.user._id;
-        const { customerId, page = 1, limit = 10 } = req.query;
+        const { customerId, statusFilter, page = 1, limit = 10 } = req.query;
         const skip = (parseInt(page) - 1) * parseInt(limit);
         
         const query = { "items.retailer": retailerId };
         if (customerId) query.user = customerId;
+        
+        if (statusFilter === "Pending") {
+            query.status = { $in: ['Pending', 'Accepted', 'Processing', 'Preparing', 'Shipped', 'Out for Delivery', 'Rider Assigned', 'Rider Accepted'] };
+        } else if (statusFilter === "Completed") {
+            query.status = { $in: ['Delivered', 'Completed'] };
+        }
 
         // Get total count for pagination
         const totalItemsCount = await Order.countDocuments(query);
@@ -440,6 +446,7 @@ export const getRetailerOrders = async (req, res) => {
                 items: retailerItems, // Filtered items for this retailer
                 user: order.user,
                 deliveryAddress: order.deliveryAddress,
+                deliverySlot: order.deliverySlot || null,
                 createdAt: order.createdAt
             };
         });
