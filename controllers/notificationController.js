@@ -6,7 +6,7 @@ export const getNotifications = async (req, res) => {
             .sort({ createdAt: -1 })
             .limit(50);
 
-        res.status(200).json({ success: true, notifications });
+        res.status(200).json({ success: true, data: notifications });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

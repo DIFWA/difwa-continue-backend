@@ -412,9 +412,9 @@ export const getAllOrders = async (req, res) => {
         const skip = (parseInt(page) - 1) * parseInt(limit);
 
         const orders = await Order.find(query)
-            .populate("items.product")
-            .populate("items.retailer", "businessDetails")
-            .populate("user", "fullName phoneNumber")
+            .populate("items.product", "name image price")
+            .populate("items.retailer", "name businessDetails")
+            .populate("user", "name fullName phoneNumber phone") // Cover all variations
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(parseInt(limit));

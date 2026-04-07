@@ -5,7 +5,7 @@ import AppUser from "../models/AppUser.js";
 import Subscription from "../models/Subscription.js";
 import { adjustBalance } from "../services/walletService.js";
 import { emitOrderUpdate, emitShopStatusUpdate } from "../services/socketService.js";
-import { createNotification } from "../services/notificationService.js";
+import { createNotification, notifyAdmins } from "../services/notificationService.js";
 import { getCurrentCommissionRate } from "./commissionController.js";
 
 // Get all approved shops (retailers)
@@ -204,20 +204,91 @@ export const getRetailerRevenueStats = async (req, res) => {
 export const getRetailerCustomers = async (req, res) => {
     try {
         const retailerId = req.user._id;
-        const orders = await Order.find({ "items.retailer": retailerId }).populate("user", "fullName email phoneNumber profilePicture");
+        
+        // Fetch all orders for this retailer to build customer history
+        const orders = await Order.find({ "items.retailer": retailerId })
+            .populate("user", "fullName email phoneNumber profilePicture createdAt")
+            .sort({ createdAt: 1 });
+
         const customerMap = new Map();
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        
+        let newCustomersCount = 0;
+        let repeatCustomersCount = 0;
+
         orders.forEach(o => {
             if (!o.user) return;
             const cId = o.user._id.toString();
-            if (!customerMap.has(cId)) customerMap.set(cId, { user: o.user, orderCount: 1 });
-            else customerMap.get(cId).orderCount++;
+            
+            if (!customerMap.has(cId)) {
+                // Determine if this is a new customer (joined in last 7 days)
+                const isNew = new Date(o.user.createdAt) >= sevenDaysAgo;
+                if (isNew) newCustomersCount++;
+                
+                customerMap.set(cId, { 
+                    user: o.user, 
+                    orderCount: 1,
+                    totalSpend: o.totalAmount || 0,
+                    lastOrderDate: o.createdAt,
+                    orders: [o]
+                });
+            } else {
+                const entry = customerMap.get(cId);
+                if (entry.orderCount === 1) repeatCustomersCount++;
+                entry.orderCount++;
+                entry.totalSpend += o.totalAmount || 0;
+                entry.lastOrderDate = o.createdAt;
+                entry.orders.push(o);
+            }
         });
 
-        const customers = Array.from(customerMap.values()).map(({ user, orderCount }) => ({
-            id: user._id, name: user.fullName || "Customer", phone: user.phoneNumber || "N/A", orderCount
+        const customers = Array.from(customerMap.values()).map(({ user, orderCount, totalSpend, lastOrderDate, orders }) => ({
+            id: user._id,
+            name: user.fullName || "Customer",
+            email: user.email || "N/A",
+            phone: user.phoneNumber || "N/A",
+            image: user.profilePicture || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.fullName || 'C')}&background=random`,
+            orderCount,
+            spend: totalSpend.toFixed(2),
+            balance: user.walletBalance || "0.00",
+            status: orderCount > 5 ? "VIP" : (new Date(user.createdAt) >= sevenDaysAgo ? "New" : "Active"),
+            lastOrder: lastOrderDate,
+            orderIds: orders.map(o => o.orderId).reverse()
         }));
 
-        res.status(200).json({ success: true, data: { customers } });
+        // Generate Chart Data (Last 7 Days)
+        const chartData = [];
+        for (let i = 6; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            const dateStr = date.toLocaleDateString('en-IN', { weekday: 'short' });
+            
+            // Count customers who made their first order on this day
+            const dailyCount = Array.from(customerMap.values()).filter(c => 
+                new Date(c.user.createdAt).toDateString() === date.toDateString()
+            ).length;
+
+            chartData.push({ name: dateStr, customers: dailyCount });
+        }
+
+        const totalCustomers = customerMap.size;
+        const repeatPercentage = totalCustomers > 0 
+            ? `${Math.round((repeatCustomersCount / totalCustomers) * 100)}%` 
+            : "0%";
+
+        res.status(200).json({ 
+            success: true, 
+            data: { 
+                customers,
+                stats: {
+                    totalCustomers,
+                    newCustomers: newCustomersCount,
+                    repeatPercentage
+                },
+                chartData
+            } 
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -225,15 +296,71 @@ export const getRetailerCustomers = async (req, res) => {
 
 export const createManualOrder = async (req, res) => {
     try {
-        const { customerId, items, paymentStatus = "Pending" } = req.body;
+        const { customerId, items, paymentStatus = "Pending", totalAmount: providedTotal, paymentMethod = "Cash", deliveryAddress } = req.body;
         const retailerId = req.user._id;
+        
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ success: false, message: "No items provided" });
+        }
+
+        // Fetch products to verify existence and get current prices
+        const productIds = items.map(i => i.productId);
+        const products = await Product.find({ _id: { $in: productIds } });
+        
+        let calculatedTotal = 0;
+        const mappedItems = items.map(item => {
+            const product = products.find(p => p._id.toString() === item.productId);
+            if (!product) throw new Error(`Product with ID ${item.productId} not found`);
+            
+            const itemPrice = product.price;
+            const itemTotal = itemPrice * item.quantity;
+            calculatedTotal += itemTotal;
+
+            return {
+                product: product._id,
+                retailer: retailerId,
+                quantity: item.quantity,
+                price: itemPrice,
+                status: "Accepted"
+            };
+        });
+
         const orderId = `ORD-MAN-${Date.now()}`;
         const order = await Order.create({
-            orderId, user: customerId, items, totalAmount: req.body.totalAmount,
-            paymentMethod: "Cash", paymentStatus, status: "Accepted", isManual: true,
-            statusHistory: [{ status: "Accepted", changedBy: retailerId, role: 'retailer', timestamp: new Date() }]
+            orderId,
+            user: customerId,
+            items: mappedItems,
+            totalAmount: providedTotal || calculatedTotal,
+            paymentMethod,
+            paymentStatus,
+            status: "Accepted",
+            isManual: true,
+            deliveryAddress: typeof deliveryAddress === 'string' ? { address: deliveryAddress } : deliveryAddress,
+            statusHistory: [{ 
+                status: "Accepted", 
+                changedBy: retailerId, 
+                role: 'retailer', 
+                timestamp: new Date() 
+            }]
         });
+
         await emitOrderUpdate(orderId, "Accepted", order, retailerId, customerId);
+        
+        createNotification(retailerId.toString(), {
+            title: "Manual Order Created! 💧",
+            message: `Manual order #${orderId.slice(-6)} for ₹${order.totalAmount} has been recorded.`,
+            type: "Order",
+            referenceId: order._id.toString()
+        });
+
+        // ─── ADMIN GLOBAL NOTIFICATION ──────────────────
+        notifyAdmins({
+            title: "Global Manual Order 📝",
+            message: `Manual order #${orderId.slice(-6)} recorded for ₹${order.totalAmount}.`,
+            type: "Order",
+            referenceId: order._id.toString()
+        });
+
         res.status(201).json({ success: true, data: order });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -254,8 +381,9 @@ export const getRetailerOrders = async (req, res) => {
         const totalPages = Math.ceil(totalItemsCount / parseInt(limit));
 
         const orders = await Order.find(query)
-            .populate("items.product", "name")
+            .populate("items.product", "name image price")
             .populate("rider", "name")
+            .populate("user", "fullName name phoneNumber phone")
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(parseInt(limit));
@@ -306,7 +434,11 @@ export const getRetailerOrders = async (req, res) => {
                     id: order.rider._id,
                     name: order.rider.name || "Delivery Partner"
                 } : null,
-                statusHistory: order.statusHistory || []
+                statusHistory: order.statusHistory || [],
+                items: retailerItems, // Filtered items for this retailer
+                user: order.user,
+                deliveryAddress: order.deliveryAddress,
+                createdAt: order.createdAt
             };
         });
 
@@ -347,6 +479,25 @@ export const updateOrderItemStatus = async (req, res) => {
         order.statusHistory = order.statusHistory || [];
         order.statusHistory.push({ status, changedBy: retailerId, role: 'retailer', timestamp: new Date() });
         await order.save();
+        
+        // ─── CUSTOMER NOTIFICATION ──────────────────
+        createNotification(order.user?._id?.toString() || order.user?.toString(), {
+            title: `Order Update! 🚚`,
+            message: `Your order #${orderId.slice(-6).toUpperCase()} is now '${status}'.`,
+            type: "Order",
+            referenceId: order._id.toString(),
+            onModel: "AppUser"
+        });
+
+        // ─── RETAILER NOTIFICATION (for activity feed) ─────────
+        createNotification(retailerId.toString(), {
+            title: `Status Updated ✅`,
+            message: `Order #${orderId.slice(-6).toUpperCase()} set to '${status}'.`,
+            type: "Order",
+            referenceId: order._id.toString(),
+            onModel: "User"
+        });
+
         await emitOrderUpdate(orderId, status, { orderId, status, statusHistory: order.statusHistory }, retailerId, order.user?._id);
         res.status(200).json({ success: true, message: "Updated" });
     } catch (error) {
@@ -364,7 +515,26 @@ export const assignRiderToOrder = async (req, res) => {
         order.status = "Rider Assigned";
         order.statusHistory.push({ status: "Rider Assigned", changedBy: retailerId, role: 'retailer', timestamp: new Date() });
         await order.save();
-        await emitOrderUpdate(orderId, "Rider Assigned", { orderId, riderId, statusHistory: order.statusHistory }, retailerId);
+        
+        // ─── CUSTOMER NOTIFICATION ──────────────────
+        createNotification(order.user?._id?.toString() || order.user?.toString(), {
+            title: `Rider Assigned! 🛵`,
+            message: `A delivery partner has been assigned to your order #${orderId.slice(-6).toUpperCase()}.`,
+            type: "Order",
+            referenceId: order._id.toString(),
+            onModel: "AppUser"
+        });
+
+        // ─── RETAILER NOTIFICATION ──────────────────
+        createNotification(retailerId.toString(), {
+            title: `Rider Assigned! 💧`,
+            message: `You assigned a rider to Order #${orderId.slice(-6).toUpperCase()}.`,
+            type: "Order",
+            referenceId: order._id.toString(),
+            onModel: "User"
+        });
+
+        await emitOrderUpdate(orderId, "Rider Assigned", { orderId, riderId, statusHistory: order.statusHistory }, retailerId, order.user?._id);
         res.status(200).json({ success: true, message: "Rider assigned" });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
