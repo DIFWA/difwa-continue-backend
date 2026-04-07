@@ -7,6 +7,7 @@ export const subscribeToProduct = async (req, res) => {
     try {
         const userId = req.userId;
         const { productId, frequency, customDays, quantity, startDate, endDate } = req.body;
+        const deliverySlot = req.body.deliverySlot || req.body.deliveryslot;
 
         const product = await Product.findById(productId);
         if (!product) {
@@ -35,7 +36,8 @@ export const subscribeToProduct = async (req, res) => {
             customDays,
             quantity,
             startDate: requestedStartDate,
-            endDate
+            endDate,
+            deliverySlot: deliverySlot || null
         });
 
         res.status(201).json({

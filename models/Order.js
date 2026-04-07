@@ -65,6 +65,10 @@ const orderSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: "Subscription"
     },
+    deliverySlot: {
+        type: String,
+        default: null
+    },
     paymentStatus: {
         type: String,
         enum: ["Pending", "Paid", "Failed", "Refunded", "Due"],

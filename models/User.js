@@ -66,6 +66,10 @@ const userSchema = new mongoose.Schema({
             gstCertificateUrl: String
         },
         storeImage: String,
+        deliverySlots: {
+            type: [String],
+            default: []
+        },
         resetPasswordToken: { type: String, default: null },
         resetPasswordExpires: { type: Date, default: null },
         otp: { type: String, default: null },
@@ -87,6 +91,10 @@ const userSchema = new mongoose.Schema({
     updatedBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
+        default: null
+    },
+    fcmToken: {
+        type: String,
         default: null
     }
 }, { timestamps: true })

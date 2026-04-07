@@ -49,6 +49,10 @@ const subscriptionSchema = new mongoose.Schema({
     deliveryAddress: {
         type: String, // For manual entry
         default: ""
+    },
+    deliverySlot: {
+        type: String,
+        default: null
     }
 }, { timestamps: true });
 

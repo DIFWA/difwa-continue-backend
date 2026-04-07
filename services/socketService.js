@@ -116,6 +116,16 @@ export const emitOrderUpdate = async (orderId, status, data, retailerId = null, 
 
     const payload = { status, data, orderId };
     
+    // Specifically trigger NEW_ORDER for admins and the specific retailer on initial 'Pending' creation
+    if (status === "Pending" && io) {
+        io.to("admin").emit("NEW_ORDER", payload);
+        io.emit("NEW_ORDER_ALL", payload); // Broadcast for redundancy
+        if (retailerId) {
+            io.to(`retailer_${retailerId.toString()}`).emit("NEW_ORDER", payload);
+            io.to(`user_${retailerId.toString()}`).emit("NEW_ORDER", payload);
+        }
+    }
+    
     // 1. Local emit - DO THIS FIRST to ensure immediate local feedback
     if (io) {
         _log(`Emitting locally to ${rooms.length} rooms`, { status: "INFO", data: rooms });

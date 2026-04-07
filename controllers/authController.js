@@ -26,7 +26,7 @@ export const registerUser = async (req, res) => {
         await newUser.save()
 
         createNotification(newUser._id.toString(), {
-            title: "Welcome to Shrimpbite! 🦐",
+            title: "Welcome to Difwa! 💧",
             message: "Your retailer account has been created. Please complete your onboarding to start selling.",
             type: "System"
         });
@@ -156,6 +156,7 @@ export const updateRetailerProfile = async (req, res) => {
 
         if (whatsappNumber !== undefined) user.whatsappNumber = whatsappNumber;
         if (name !== undefined) user.name = name; // Also allow updating name
+        if (req.body.fcmToken !== undefined) user.fcmToken = req.body.fcmToken;
 
         await user.save();
         res.status(200).json({ success: true, message: "Profile updated successfully", data: user });

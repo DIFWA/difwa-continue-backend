@@ -78,5 +78,6 @@ router.delete("/products/:id", protect, retailerOnly, deleteProduct);
 router.put("/profile", protect, retailerOnly, updateRetailerProfile);
 router.patch("/toggle-status", protect, retailerOnly, toggleShopStatus);
 router.post("/finalize-weight", protect, retailerOnly, finalizeOrderWeight);
+router.patch("/fcm-token", protect, retailerOnly, updateRetailerProfile); // Reusing profile update for simplicity or creating specific one
 
 export default router;

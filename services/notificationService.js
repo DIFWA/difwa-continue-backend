@@ -7,18 +7,35 @@ import { sendWelcomeEmail } from "./emailService.js";
  * @param {string} recipientId - The User ID of the recipient.
  * @param {object} data - { title, message, type, referenceId }
  */
-export const createNotification = async (recipientId, { title, message, type, referenceId }) => {
+export const createNotification = async (recipientId, { title, message, type, referenceId, onModel = "User" }) => {
     try {
         const notification = await Notification.create({
             recipient: recipientId,
             title,
             message,
             type,
-            referenceId
+            referenceId,
+            onModel
         });
 
         // Emit via socket
         await emitNotification(recipientId, notification.toObject());
+
+        // ─── PUSH NOTIFICATION ───────────────────────────
+        try {
+            const User = (await import("../models/User.js")).default;
+            const AppUser = (await import("../models/AppUser.js")).default;
+            
+            // Try to find recipient in both User and AppUser collections
+            let user = await User.findById(recipientId).select("fcmToken");
+            if (!user) user = await AppUser.findById(recipientId).select("fcmToken");
+
+            if (user?.fcmToken) {
+                await sendPushNotification(user.fcmToken, title, message);
+            }
+        } catch (pushErr) {
+            console.error("Push delivery failed:", pushErr.message);
+        }
 
         return notification;
     } catch (error) {
@@ -75,6 +92,25 @@ export const sendPushNotificationToAll = async (title, body) => {
         return response;
     } catch (error) {
         console.error("❌ Broadcast failed:", error.message);
+    }
+};
+
+/**
+ * Broadcasts a notification to all Admin users.
+ */
+export const notifyAdmins = async ({ title, message, type, referenceId }) => {
+    try {
+        const User = (await import("../models/User.js")).default;
+        const admins = await User.find({ role: "admin" }).select("_id");
+
+        if (admins.length > 0) {
+            await Promise.all(admins.map(admin => 
+                createNotification(admin._id.toString(), { title, message, type, referenceId })
+            ));
+            console.log(`📡 Broadcast to ${admins.length} Admins completed`);
+        }
+    } catch (error) {
+        console.error("Failed to notify admins:", error.message);
     }
 };
 

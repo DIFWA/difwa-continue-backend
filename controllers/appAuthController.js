@@ -374,6 +374,12 @@ export const updateProfile = async (req, res) => {
             updates.push("phoneNumber");
         }
 
+        // fcmToken update
+        if (req.body.fcmToken !== undefined) {
+            user.fcmToken = req.body.fcmToken;
+            updates.push("fcmToken");
+        }
+
         await user.save();
 
         // send welcome email (non-blocking)

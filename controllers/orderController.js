@@ -6,7 +6,7 @@ import AppUser from "../models/AppUser.js";
 import Subscription from "../models/Subscription.js";
 import * as walletService from "../services/walletService.js";
 import { emitOrderUpdate } from "../services/socketService.js";
-import { createNotification } from "../services/notificationService.js";
+import { createNotification, notifyAdmins } from "../services/notificationService.js";
 import { getCurrentCommissionRate } from "./commissionController.js";
 
 // Helper: Sleep function for delays if needed
@@ -22,7 +22,8 @@ export const placeOrder = async (req, res) => {
 
     try {
         const userId = req.userId;
-        let { deliveryAddress, paymentMethod, orderType, items: bodyItems } = req.body;
+        const { deliveryAddress, paymentMethod, orderType, items: bodyItems } = req.body;
+        const deliverySlot = req.body.deliverySlot || req.body.deliveryslot;
 
         // 1. Fetch Items (Source: req.body.items OR Cart DB)
         let cartItems = [];
@@ -120,6 +121,7 @@ export const placeOrder = async (req, res) => {
             totalAmount,
             deliveryAddress,
             paymentMethod,
+            deliverySlot: deliverySlot || null,
             paymentStatus: paymentMethod === "Wallet" ? "Paid" : "Pending",
             orderType: orderType || "One-time",
             commissionRate,
@@ -148,8 +150,16 @@ export const placeOrder = async (req, res) => {
         // 8. Background Sockets & Notifications
         await emitOrderUpdate(createdOrder.orderId, "Pending", createdOrder, identifiedRetailer, userId);
         createNotification(identifiedRetailer.toString(), {
-            title: "New Order Received! 🦐",
+            title: "New Order Received! 💧",
             message: `You have a new order (#${createdOrder._id.toString().slice(-6)}) for ₹${totalAmount}.`,
+            type: "Order",
+            referenceId: createdOrder._id.toString()
+        });
+
+        // ─── ADMIN GLOBAL NOTIFICATION ──────────────────
+        notifyAdmins({
+            title: "Global Order Alert 🛒",
+            message: `Order #${createdOrder._id.toString().slice(-6)} placed for ₹${totalAmount}.`,
             type: "Order",
             referenceId: createdOrder._id.toString()
         });
@@ -360,12 +370,42 @@ export const handleBulkOrders = async (req, res) => {
                 });
                 await order.save();
 
+                // ─── CUSTOMER NOTIFICATION ──────────────────
+                createNotification(order.user?.toString(), {
+                    title: `Order Update! ${order.status === 'Delivered' ? '🎉' : '🚚'}`,
+                    message: `Your order #${order.orderId.slice(-6).toUpperCase()} is now '${order.status}'.`,
+                    type: "Order",
+                    referenceId: order._id.toString(),
+                    onModel: "AppUser"
+                });
+
+                // ─── RETAILER NOTIFICATION ──────────────────
+                createNotification(retailerId.toString(), {
+                    title: `Status Updated ✅`,
+                    message: `Order #${order.orderId.slice(-6).toUpperCase()} set to '${order.status}'.`,
+                    type: "Order",
+                    referenceId: order._id.toString(),
+                    onModel: "User"
+                });
+
+                // Get rider name if assigned
+                let riderDataToEmit = null;
+                if (order.rider) {
+                    const User = (await import("../models/User.js")).default;
+                    const riderUser = await User.findById(order.rider).select("name");
+                    riderDataToEmit = {
+                        id: order.rider,
+                        name: riderUser?.name || "Rider"
+                    };
+                }
+
                 // Emit real-time update
                 emitOrderUpdate(order.orderId, order.status, {
                     orderId: order.orderId,
                     status: order.status,
                     statusHistory: order.statusHistory,
-                    rider: order.rider
+                    rider: riderDataToEmit,
+                    riderName: riderDataToEmit?.name
                 }, retailerId, order.user?.toString());
 
                 results.push({ orderId: order.orderId, status: order.status });
@@ -377,6 +417,7 @@ export const handleBulkOrders = async (req, res) => {
         res.status(200).json({
             success: true,
             message: `Bulk processed ${results.length} order(s).`,
+            processed: results.length,
             updated: results,
             failed: errors
         });
