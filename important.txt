@@ -1,1 +1,67 @@
 node tmp/create_pending_order.js
+
+chmod 400 /Users/rajesh/Documents/other/difwa/difwa-continue-backend/difwapem.pem
+13.51.98.93
+ssh -i /Users/rajesh/Documents/other/difwa/difwa-continue-backend/difwapem.pem ubuntu@13.51.98.93
+
+sudo apt update && sudo apt upgrade -y
+
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+
+sudo apt-get install -y nodejs
+
+
+type -p curl >/dev/null || (sudo apt update && sudo apt install curl -y)
+curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+&& sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+&& echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+&& sudo apt update \
+&& sudo apt install gh -y
+
+
+gh auth login 
+
+gh repo list difwa
+
+gh repo clone DIFWA/difwa-continue-backend
+
+nano .env
+
+can run now 
+
+with pm2 
+
+
+pm2 start server.js --name "difwa-
+
+pm2 start server.js --name "difwa-backend"
+
+
+pm2 logs difwa-backend
+
+curl ifconfig.me
+
+
+
+
+
+// debugging 
+
+Debugging Command
+You can run this command in your terminal to see exactly where the connection is failing:
+
+bash
+ssh -v -i /Users/rajesh/Documents/other/difwa/difwa-continue-backend/difwapem.pem ubuntu@13.51.98.93
+
+
+making https 
+
+sudo apt update
+sudo apt install certbot python3-certbot-nginx -y
+
+
+sudo apt update
+sudo apt install certbot python3-certbot-nginx -y
+
+
+sudo certbot --nginx -d api.difwa.com

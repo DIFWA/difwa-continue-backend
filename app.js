@@ -28,21 +28,23 @@ import faqRoutes from "./routes/faqRoutes.js";
 import Faq from "./models/Faq.js";
 const app = express()
 
-
-
-app.use(cors({
-    origin: true,
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "ngrok-skip-browser-warning", "Accept", "X-Requested-With", "Origin"]
-}));
+// Trust proxy for ngrok/vercel
+app.set('trust proxy', 1);
 
 app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
-    res.header("Access-Control-Allow-Credentials", "true");
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, ngrok-skip-browser-warning, Accept, X-Requested-With, Origin");
+    const origin = req.headers.origin;
 
+    if (origin) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+    } else {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+    }
+
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "X-Requested-With, Content-Type, Authorization, ngrok-skip-browser-warning, Accept, Origin");
+
+    // Handle Preflight
     if (req.method === "OPTIONS") {
         return res.sendStatus(200);
     }
@@ -77,12 +79,8 @@ app.use("/api/admin", adminRoutes)
 app.use("/api/upload", uploadRoutes)
 app.use("/api/retailer", retailerRoutes)
 app.use("/api/otp", otpRoutes);
-
-// App Routes (supporting both /api/app and /app)
 app.use("/api/app", appAuthRoutes);
 app.use("/app", appAuthRoutes);
-
-// Wallet Routes (supporting both /api/wallet and /wallet)
 app.use("/api/wallet", walletRoutes);
 app.use("/wallet", walletRoutes);
 
