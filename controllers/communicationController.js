@@ -71,10 +71,13 @@ export const sendBulkNotification = async (req, res) => {
             pushTokens = [...pushTokens, ...riders.map(u => u.fcmToken)];
         }
 
-        // 3. Fetch retailers for Database/Panel (regardless of FCM token)
+        // 3. Fetch retailers for Database/Panel AND FCM
         if (targetType === "all" || targetType === "retailer") {
-            const retailers = await User.find({ role: "retailer" }).select("_id");
+            const retailers = await User.find({ role: "retailer" }).select("_id fcmToken");
             retailerIds = retailers.map(u => u._id);
+            // Add retailer tokens if they exist
+            const retailerTokens = retailers.map(u => u.fcmToken).filter(token => token && token !== "");
+            pushTokens = [...pushTokens, ...retailerTokens];
         }
 
         // 4. Create Database Notifications for ALL targets (Retailers, Customers, Riders)
