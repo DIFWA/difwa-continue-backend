@@ -171,7 +171,7 @@ export const generateDailyOrders = async (targetDate = new Date()) => {
                 paymentStatus,
                 paymentMethod,
                 isManual: sub.isManual || false,
-                deliveryAddress: sub.deliveryAddress ? { address: sub.deliveryAddress } : undefined,
+                deliveryAddress: sub.deliveryAddress && Object.keys(sub.deliveryAddress).length > 0 ? sub.deliveryAddress : undefined,
                 deliverySlot: sub.deliverySlot || null,
                 commissionRate,
                 commissionAmount

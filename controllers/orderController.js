@@ -59,10 +59,12 @@ export const placeOrder = async (req, res) => {
             const defaultAddress = user?.addresses?.find(a => a.isDefault);
             if (defaultAddress) {
                 deliveryAddress = {
+                    fullName: user.fullName,
                     address: defaultAddress.fullAddress,
                     city: defaultAddress.city,
                     state: defaultAddress.state,
-                    pincode: defaultAddress.pincode
+                    pincode: defaultAddress.pincode,
+                    label: defaultAddress.label
                 };
             }
         }
@@ -184,7 +186,46 @@ export const getMyOrders = async (req, res) => {
     try {
         const orders = await Order.find({ user: req.userId })
             .populate("items.product")
-            .populate("items.retailer", "businessDetails")
+            .populate("items.retailer", "businessDetails fullName phoneNumber")
+            .populate("rider", "name phone")
+            .sort({ createdAt: -1 });
+
+        res.status(200).json({
+            success: true,
+            orders
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const getActiveOrders = async (req, res) => {
+    try {
+        const userId = req.userId;
+        const orders = await Order.find({ 
+            user: userId,
+            status: { $in: ["Pending", "Accepted", "Processing", "Preparing", "Shipped", "Out for Delivery", "Rider Assigned", "Rider Accepted"] }
+        })
+            .populate("items.product")
+            .populate("items.retailer", "businessDetails fullName phoneNumber")
+            .populate("rider", "name phone")
+            .sort({ createdAt: -1 });
+
+        res.status(200).json({
+            success: true,
+            orders
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const getOrdersBySubscription = async (req, res) => {
+    try {
+        const subscriptionId = req.params.id;
+        const orders = await Order.find({ subscriptionId })
+            .populate("items.product")
+            .populate("items.retailer", "businessDetails fullName phoneNumber")
             .populate("rider", "name phone")
             .sort({ createdAt: -1 });
 
@@ -202,13 +243,13 @@ export const getUserOrderHistory = async (req, res) => {
         const userId = req.userId;
         const orders = await Order.find({ user: userId })
             .populate("items.product")
-            .populate("items.retailer", "businessDetails")
+            .populate("items.retailer", "businessDetails fullName phoneNumber")
             .populate("rider", "name phone")
             .sort({ createdAt: -1 });
 
         const subscriptions = await Subscription.find({ user: userId })
             .populate("product")
-            .populate("retailer", "businessDetails")
+            .populate("retailer", "businessDetails.storeDisplayName fullName phoneNumber")
             .sort({ createdAt: -1 });
 
         res.status(200).json({
@@ -234,7 +275,7 @@ export const getOrderTracking = async (req, res) => {
 
         const order = await Order.findOne(query)
             .populate("items.product")
-            .populate("items.retailer", "businessDetails")
+            .populate("items.retailer", "businessDetails fullName phoneNumber")
             .populate("rider", "name phone")
             .populate("subscriptionId");
 

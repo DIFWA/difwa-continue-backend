@@ -47,10 +47,12 @@ const orderSchema = new mongoose.Schema({
         default: "Pending"
     },
     deliveryAddress: {
+        fullName: String,
         address: String,
         city: String,
         state: String,
         pincode: String,
+        label: String,
         coordinates: {
             lat: Number,
             lng: Number

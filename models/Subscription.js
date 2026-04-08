@@ -47,8 +47,12 @@ const subscriptionSchema = new mongoose.Schema({
         default: false
     },
     deliveryAddress: {
-        type: String, // For manual entry
-        default: ""
+        fullName: String,
+        address: String, // Maps to fullAddress in AppUser
+        city: String,
+        state: String,
+        pincode: String,
+        label: String
     },
     deliverySlot: {
         type: String,

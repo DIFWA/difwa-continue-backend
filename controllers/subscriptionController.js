@@ -6,7 +6,7 @@ import { createSubscription as createSubService, generateDailyOrders } from "../
 export const subscribeToProduct = async (req, res) => {
     try {
         const userId = req.userId;
-        const { productId, frequency, customDays, quantity, startDate, endDate } = req.body;
+        const { productId, frequency, customDays, quantity, startDate, endDate, deliveryAddress } = req.body;
         const deliverySlot = req.body.deliverySlot || req.body.deliveryslot;
 
         const product = await Product.findById(productId);
@@ -37,7 +37,8 @@ export const subscribeToProduct = async (req, res) => {
             quantity,
             startDate: requestedStartDate,
             endDate,
-            deliverySlot: deliverySlot || null
+            deliverySlot: deliverySlot || null,
+            deliveryAddress: deliveryAddress || null
         });
 
         res.status(201).json({
@@ -54,7 +55,7 @@ export const getMySubscriptions = async (req, res) => {
     try {
         const subscriptions = await Subscription.find({ user: req.userId })
             .populate("product")
-            .populate("retailer", "businessDetails.storeDisplayName");
+            .populate("retailer", "businessDetails.storeDisplayName fullName phoneNumber");
 
         res.status(200).json({
             success: true,
