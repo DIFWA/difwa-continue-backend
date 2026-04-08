@@ -189,18 +189,17 @@ export const completeDelivery = async (req, res) => {
 
 export const addRider = async (req, res) => {
     try {
-        const { name, email, password, phone, vehicleType, plateNumber } = req.body;
+        const { name, phone, vehicleType, plateNumber } = req.body;
         const retailerId = req.user.id;
 
-        const existingUser = await User.findOne({ email });
-        if (existingUser) return res.status(400).json({ success: false, message: "A user with this email already exists" });
+        if (!phone) return res.status(400).json({ success: false, message: "Phone number is required" });
 
-        // Create User account
-        const hashedPassword = await bcrypt.hash(password, 12);
+        const existingUser = await User.findOne({ phone });
+        if (existingUser) return res.status(400).json({ success: false, message: "A user with this phone number already exists" });
+
+        // Create User account (No password/email required for OTP flow)
         const user = new User({
             name,
-            email,
-            password: hashedPassword,
             phone,
             role: "rider",
             status: "approved"
