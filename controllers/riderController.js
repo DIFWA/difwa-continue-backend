@@ -69,6 +69,15 @@ export const updateDeliveryStatus = async (req, res) => {
             });
         }
 
+        // ─── NOTIFY CUSTOMER ──────────────────────────
+        createNotification(userId.toString(), {
+            title: `Order Update! ${status === 'Delivered' ? '🎉' : '🚚'}`,
+            message: `Your order #${orderId.slice(-6).toUpperCase()} is now '${status}'.`,
+            type: "Order",
+            referenceId: order._id.toString(),
+            onModel: "AppUser"
+        });
+
         res.status(200).json({ success: true, data: order });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -159,6 +168,15 @@ export const completeDelivery = async (req, res) => {
             message: `Order #${orderId.slice(-6).toUpperCase()} delivered to ${customer?.fullName || "Customer"} customer by rider ${riderTemp?.name || "Rider"}.`,
             type: "Order",
             referenceId: orderId
+        });
+
+        // ─── NOTIFY CUSTOMER ──────────────────────────
+        createNotification(order.user.toString(), {
+            title: `Order Delivered!`,
+            message: `Your order #${orderId.slice(-6).toUpperCase()} has been delivered successfully.`,
+            type: "Order",
+            referenceId: order._id.toString(),
+            onModel: "AppUser"
         });
 
         res.status(200).json({ success: true, message: "Order delivered successfully", refund: totalRefund });

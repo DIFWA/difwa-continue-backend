@@ -402,6 +402,15 @@ export const handleBulkOrders = async (req, res) => {
                         role: "retailer",
                         timestamp: new Date()
                     });
+
+                    // ─── RIDER NOTIFICATION (Auto-Assign) ───────
+                    createNotification(bestRiderId.toString(), {
+                        title: `New Assignment! 🛵`,
+                        message: `You have been assigned to deliver order #${order.orderId.slice(-6).toUpperCase()}.`,
+                        type: "Order",
+                        referenceId: order._id.toString(),
+                        onModel: "User"
+                    });
                 } else {
                     order.status = status;
                 }

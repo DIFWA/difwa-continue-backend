@@ -491,7 +491,7 @@ export const updateOrderItemStatus = async (req, res) => {
         
         // ─── CUSTOMER NOTIFICATION ──────────────────
         createNotification(order.user?._id?.toString() || order.user?.toString(), {
-            title: `Order Update! 🚚`,
+            title: `Order Update! ${status === 'Delivered' ? '🎉' : '🚚'}`,
             message: `Your order #${orderId.slice(-6).toUpperCase()} is now '${status}'.`,
             type: "Order",
             referenceId: order._id.toString(),
@@ -534,9 +534,18 @@ export const assignRiderToOrder = async (req, res) => {
             onModel: "AppUser"
         });
 
+        // ─── RIDER NOTIFICATION ──────────────────────
+        createNotification(riderId.toString(), {
+            title: `New Task Assigned! 💧`,
+            message: `You have been assigned to deliver order #${orderId.slice(-6).toUpperCase()}.`,
+            type: "Order",
+            referenceId: order._id.toString(),
+            onModel: "User"
+        });
+
         // ─── RETAILER NOTIFICATION ──────────────────
         createNotification(retailerId.toString(), {
-            title: `Rider Assigned! 💧`,
+            title: `Rider Assigned! ✅`,
             message: `You assigned a rider to Order #${orderId.slice(-6).toUpperCase()}.`,
             type: "Order",
             referenceId: order._id.toString(),
