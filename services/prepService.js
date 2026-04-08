@@ -10,47 +10,65 @@ export const getDailyPrepList = async (retailerId, dateString) => {
 
     const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'long' });
 
-    // Fetch subscription orders for today (Scheduled only)
-    const subscriptionOrders = await Order.find({
-        "items.retailer": retailerId,
-        orderType: "Subscription",
-        createdAt: { $gte: date, $lt: nextDay },
-        status: { $nin: ["Cancelled"] }
-    }).populate("items.product").populate("user", "fullName phoneNumber alternateContact");
+    const todayStr = new Date().toISOString().split('T')[0];
+    const targetStr = date.toISOString().split('T')[0];
+    const isFuture = targetStr > todayStr;
 
     const summary = {};
     const detailed = [];
     const paused = [];
 
-    // Process all subscription orders
-    subscriptionOrders.forEach(order => {
-        // Flatten items: each product gets its own row as requested
-        order.items.forEach(item => {
-            if (item.retailer && item.retailer.toString() === retailerId.toString()) {
-                const prod = item.product;
-                if (!prod) return;
+    if (isFuture) {
+        // --- 🔮 PREDICTIVE FUTURE LOGIC ---
+        // For tomorrow or later, orders aren't generated yet. We must predict from active Subscriptions.
+        const activeSubscriptions = await Subscription.find({
+            retailer: retailerId,
+            status: { $nin: ["Cancelled"] }
+        }).populate("product").populate("user", "fullName phoneNumber alternateContact");
 
-                const row = {
-                    id: `${order._id}_${prod._id}`,
-                    orderId: order.orderId,
-                    customerName: order.user?.fullName || "Guest Customer",
-                    phoneNumber: order.user?.phoneNumber || "N/A",
-                    productName: prod.name,
-                    category: prod.category || "General",
-                    quantity: item.quantity,
-                    price: item.price,
-                    deliverySlot: order.deliverySlot || "Standard",
-                    status: order.status,
-                    isPaused: order.status === "Paused" || order.status === "Vacation" || (order.pauseMetrics && order.pauseMetrics.isPaused)
-                };
+        activeSubscriptions.forEach(sub => {
+            const prod = sub.product;
+            if (!prod) return;
 
-                if (row.isPaused) {
-                    paused.push(row);
-                } else {
-                    detailed.push(row);
-                }
+            // 1. Check if subscription triggers on this specific day
+            let triggersToday = false;
+            if (sub.frequency === "Daily") triggersToday = true;
+            else if (sub.frequency === "Alternate Days") {
+                // If the difference in days from start date is even, it triggers.
+                const daysDiff = Math.floor((date.getTime() - new Date(sub.startDate).getTime()) / (1000 * 60 * 60 * 24));
+                triggersToday = daysDiff % 2 === 0;
+            } else if (sub.frequency === "Weekly") {
+                triggersToday = sub.customDays.includes(dayOfWeek);
+            }
 
-                // Keep summary logic for total packing counts
+            if (!triggersToday) return;
+
+            // 2. Check if on vacation
+            const isVacation = sub.vacationDates.some(vDate =>
+                new Date(vDate).toISOString().split('T')[0] === targetStr
+            );
+
+            const isPaused = sub.status === "Paused" || isVacation;
+
+            const row = {
+                id: `predict_${sub._id}_${prod._id}`,
+                orderId: `PRED-${sub._id.toString().slice(-4).toUpperCase()}`,
+                customerName: sub.user?.fullName || "Guest Customer",
+                phoneNumber: sub.user?.phoneNumber || "N/A",
+                productName: prod.name,
+                category: prod.category || "General",
+                quantity: sub.quantity,
+                price: prod.price || 0,
+                deliverySlot: sub.deliverySlot || "Standard",
+                status: isPaused ? "Paused" : "Predicted",
+                isPaused: isPaused
+            };
+
+            if (row.isPaused) {
+                paused.push(row);
+            } else {
+                detailed.push(row);
+                // Keep summary logic updated
                 const prodId = prod._id.toString();
                 if (!summary[prodId]) {
                     summary[prodId] = {
@@ -63,14 +81,72 @@ export const getDailyPrepList = async (retailerId, dateString) => {
                         status: "Pending"
                     };
                 }
-                if (!row.isPaused) {
-                    summary[prodId].quantity += item.quantity;
-                    summary[prodId].orderCount += 1;
-                    summary[prodId].totalRevenue += (item.price || 0) * item.quantity;
-                }
+                summary[prodId].quantity += sub.quantity;
+                summary[prodId].orderCount += 1;
+                summary[prodId].totalRevenue += (prod.price || 0) * sub.quantity;
             }
         });
-    });
+
+    } else {
+        // --- 📦 CONCRETE TODAY LOGIC ---
+        // For today or past dates, Orders have already been generated by CRON. Use concrete data.
+        const subscriptionOrders = await Order.find({
+            "items.retailer": retailerId,
+            orderType: "Subscription",
+            createdAt: { $gte: date, $lt: nextDay },
+            status: { $nin: ["Cancelled"] }
+        }).populate("items.product").populate("user", "fullName phoneNumber alternateContact");
+
+        // Process all concrete subscription orders
+        subscriptionOrders.forEach(order => {
+            // Flatten items: each product gets its own row as requested
+            order.items.forEach(item => {
+                if (item.retailer && item.retailer.toString() === retailerId.toString()) {
+                    const prod = item.product;
+                    if (!prod) return;
+
+                    const row = {
+                        id: `${order._id}_${prod._id}`,
+                        orderId: order.orderId,
+                        customerName: order.user?.fullName || "Guest Customer",
+                        phoneNumber: order.user?.phoneNumber || "N/A",
+                        productName: prod.name,
+                        category: prod.category || "General",
+                        quantity: item.quantity,
+                        price: item.price,
+                        deliverySlot: order.deliverySlot || "Standard",
+                        status: order.status,
+                        isPaused: order.status === "Paused" || order.status === "Vacation" || (order.pauseMetrics && order.pauseMetrics.isPaused)
+                    };
+
+                    if (row.isPaused) {
+                        paused.push(row);
+                    } else {
+                        detailed.push(row);
+                    }
+
+                    // Keep summary logic for total packing counts
+                    const prodId = prod._id.toString();
+                    if (!summary[prodId]) {
+                        summary[prodId] = {
+                            id: prodId,
+                            productName: prod.name,
+                            category: prod.category || "General",
+                            quantity: 0,
+                            orderCount: 0,
+                            totalRevenue: 0,
+                            status: "Pending"
+                        };
+                    }
+                    if (!row.isPaused) {
+                        summary[prodId].quantity += item.quantity;
+                        summary[prodId].orderCount += 1;
+                        summary[prodId].totalRevenue += (item.price || 0) * item.quantity;
+                    }
+                }
+            });
+        });
+    }
 
     return {
         summary: Object.values(summary),
