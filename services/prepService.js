@@ -10,63 +10,71 @@ export const getDailyPrepList = async (retailerId, dateString) => {
 
     const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'long' });
 
-    // Fetch subscription orders already created for today
+    // Fetch subscription orders for today (Scheduled only)
     const subscriptionOrders = await Order.find({
         "items.retailer": retailerId,
         orderType: "Subscription",
         createdAt: { $gte: date, $lt: nextDay },
-        status: { $nin: ["Cancelled", "Delivered"] }
-    }).populate("items.product");
+        status: { $nin: ["Cancelled"] }
+    }).populate("items.product").populate("user", "fullName phoneNumber alternateContact");
 
-    // Also include active one-time orders for today
-    const oneTimeOrders = await Order.find({
-        "items.retailer": retailerId,
-        orderType: "One-time",
-        createdAt: { $gte: date, $lt: nextDay },
-        status: { $nin: ["Cancelled", "Delivered"] }
-    }).populate("items.product");
+    const summary = {};
+    const detailed = [];
+    const paused = [];
 
-    const requirements = {};
-
-    const addItemToRequirements = (item, type) => {
-        if (!item.product) return;
-        const prodId = item.product._id.toString();
-        if (!requirements[prodId]) {
-            requirements[prodId] = {
-                id: prodId,
-                productName: item.product.name,
-                category: item.product.category || "Uncategorized",
-                quantity: 0,
-                unit: item.product.unit || "L",
-                orderCount: 0,
-                subscriptionCount: 0,
-                oneTimeCount: 0,
-                totalRevenue: 0, // NEW field
-                status: "Pending"
-            };
-        }
-        requirements[prodId].quantity += item.quantity;
-        requirements[prodId].orderCount += 1;
-        requirements[prodId].totalRevenue += (item.product.price || 0) * item.quantity; // NEW calculation
-        if (type === "Subscription") requirements[prodId].subscriptionCount += 1;
-        else requirements[prodId].oneTimeCount += 1;
-    };
-
+    // Process all subscription orders
     subscriptionOrders.forEach(order => {
+        // Flatten items: each product gets its own row as requested
         order.items.forEach(item => {
             if (item.retailer && item.retailer.toString() === retailerId.toString()) {
-                addItemToRequirements(item, "Subscription");
+                const prod = item.product;
+                if (!prod) return;
+
+                const row = {
+                    id: `${order._id}_${prod._id}`,
+                    orderId: order.orderId,
+                    customerName: order.user?.fullName || "Guest Customer",
+                    phoneNumber: order.user?.phoneNumber || "N/A",
+                    productName: prod.name,
+                    category: prod.category || "General",
+                    quantity: item.quantity,
+                    price: item.price,
+                    deliverySlot: order.deliverySlot || "Standard",
+                    status: order.status,
+                    isPaused: order.status === "Paused" || order.status === "Vacation" || (order.pauseMetrics && order.pauseMetrics.isPaused)
+                };
+
+                if (row.isPaused) {
+                    paused.push(row);
+                } else {
+                    detailed.push(row);
+                }
+
+                // Keep summary logic for total packing counts
+                const prodId = prod._id.toString();
+                if (!summary[prodId]) {
+                    summary[prodId] = {
+                        id: prodId,
+                        productName: prod.name,
+                        category: prod.category || "General",
+                        quantity: 0,
+                        orderCount: 0,
+                        totalRevenue: 0,
+                        status: "Pending"
+                    };
+                }
+                if (!row.isPaused) {
+                    summary[prodId].quantity += item.quantity;
+                    summary[prodId].orderCount += 1;
+                    summary[prodId].totalRevenue += (item.price || 0) * item.quantity;
+                }
             }
         });
     });
 
-    oneTimeOrders.forEach(order => {
-        order.items.forEach(item => {
-            if (item.retailer && item.retailer.toString() === retailerId.toString()) {
-                addItemToRequirements(item, "One-time");
-            }
-        });
-    });
-
-    return Object.values(requirements);
+    return {
+        summary: Object.values(summary),
+        active: detailed,
+        paused: paused
+    };
 };
