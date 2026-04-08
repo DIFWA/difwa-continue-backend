@@ -31,7 +31,13 @@ export const createNotification = async (recipientId, { title, message, type, re
             if (!user) user = await AppUser.findById(recipientId).select("fcmToken");
 
             if (user?.fcmToken) {
-                await sendPushNotification(user.fcmToken, title, message);
+                // Pass extra data for navigation in Flutter App
+                const payloadData = {
+                    type: type || "NOTIFICATION",
+                    id: referenceId?.toString() || "",
+                    onModel: onModel || "AppUser"
+                };
+                await sendPushNotification(user.fcmToken, title, message, payloadData);
             }
         } catch (pushErr) {
             console.error("Push delivery failed:", pushErr.message);
@@ -44,9 +50,9 @@ export const createNotification = async (recipientId, { title, message, type, re
 };
 
 /**
- * Sends a push notification via FCM.
+ * Sends a push notification via FCM with high priority and data payload.
  */
-export const sendPushNotification = async (fcmToken, title, body) => {
+export const sendPushNotification = async (fcmToken, title, body, data = {}) => {
     try {
         if (!fcmToken) {
             console.log("No FCM token provided");
@@ -55,12 +61,33 @@ export const sendPushNotification = async (fcmToken, title, body) => {
 
         const admin = (await import("../config/firebase.js")).default;
 
-        await admin.messaging().send({
-            notification: { title, body },
+        const message = {
             token: fcmToken,
-        });
+            notification: {
+                title,
+                body,
+            },
+            data: data, // Custom data for navigation/handling
+            android: {
+                priority: "high",
+                notification: {
+                    channelId: "difwa_high_importance",
+                    sound: "default",
+                },
+            },
+            apns: {
+                payload: {
+                    aps: {
+                        contentAvailable: true,
+                        sound: "default",
+                    },
+                },
+            },
+        };
 
-        console.log(`✅ Push notification sent | Title: ${title}`);
+        const response = await admin.messaging().send(message);
+
+        console.log(`✅ Push notification sent | Title: ${title} | Response: ${response}`);
         return { success: true };
     } catch (error) {
         console.error("❌ Push notification failed:", error.message);
@@ -86,6 +113,13 @@ export const sendPushNotificationToAll = async (title, body) => {
         const response = await admin.messaging().sendEachForMulticast({
             notification: { title, body },
             tokens,
+            android: {
+                priority: "high",
+                notification: {
+                    channelId: "difwa_high_importance",
+                    sound: "default",
+                },
+            },
         });
 
         console.log(`✅ Sent: ${response.successCount} | ❌ Failed: ${response.failureCount}`);
