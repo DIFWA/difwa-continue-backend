@@ -150,7 +150,11 @@ export const placeOrder = async (req, res) => {
         await session.commitTransaction();
 
         // 8. Background Sockets & Notifications
-        await emitOrderUpdate(createdOrder.orderId, "Pending", createdOrder, identifiedRetailer, userId);
+        const populatedOrder = await Order.findById(createdOrder._id)
+            .populate("items.product")
+            .populate("items.retailer", "businessDetails fullName phoneNumber");
+
+        await emitOrderUpdate(createdOrder.orderId, "Pending", populatedOrder, identifiedRetailer, userId);
         createNotification(identifiedRetailer.toString(), {
             title: "New Order Received! 💧",
             message: `You have a new order (#${createdOrder._id.toString().slice(-6)}) for ₹${totalAmount}.`,
