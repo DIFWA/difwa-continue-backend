@@ -2,6 +2,7 @@ import Subscription from "../models/Subscription.js";
 import Product from "../models/Product.js";
 import SubscriptionPlan from "../models/SubscriptionPlan.js";
 import { createSubscription as createSubService, generateDailyOrders } from "../services/subscriptionService.js";
+import { emitOrderUpdate } from "../services/socketService.js";
 
 export const subscribeToProduct = async (req, res) => {
     try {
@@ -118,6 +119,9 @@ export const updateVacation = async (req, res) => {
             return res.status(404).json({ success: false, message: "Subscription not found" });
         }
 
+        // Emit update so retailer dashboard (Prep List) refreshes in real-time
+        await emitOrderUpdate(subscription._id, "Vacation Updated", subscription, subscription.retailer, subscription.user);
+
         res.status(200).json({
             success: true,
             message: "Vacation dates updated successfully",
@@ -147,6 +151,9 @@ export const updateSubscriptionStatus = async (req, res) => {
         if (!subscription) {
             return res.status(404).json({ success: false, message: "Subscription not found" });
         }
+
+        // Emit update so retailer dashboard (Prep List) refreshes in real-time
+        await emitOrderUpdate(subscription._id, status, subscription, subscription.retailer, subscription.user);
 
         res.status(200).json({
             success: true,
