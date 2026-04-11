@@ -351,8 +351,8 @@ export const handleBulkOrders = async (req, res) => {
             return res.status(400).json({ success: false, message: `Invalid status. Must be one of: ${validStatuses.join(", ")}` });
         }
 
-        // ─── Find Best Rider (Lightest Load) ───
-        let bestRiderId = null;
+        // ─── Find online riders and their current workloads ───
+        let riderWorkloads = [];
         if (status === "Accepted") {
             const RiderModel = (await import("../models/Rider.js")).default;
             const onlineRiders = await RiderModel.find({ 
@@ -362,17 +362,13 @@ export const handleBulkOrders = async (req, res) => {
 
             if (onlineRiders.length > 0) {
                 // Count current active orders for each online rider
-                const riderWorkloads = await Promise.all(onlineRiders.map(async (r) => {
+                riderWorkloads = await Promise.all(onlineRiders.map(async (r) => {
                     const count = await Order.countDocuments({ 
                         rider: r.user, 
-                        status: { $in: ["Accepted", "Rider Accepted", "Processing", "Preparing", "Shipped", "Out for Delivery"] } 
+                        status: { $in: ["Accepted", "Rider Assigned", "Rider Accepted", "Processing", "Preparing", "Shipped", "Out for Delivery"] } 
                     });
                     return { riderId: r.user, count };
                 }));
-
-                // Sort by count and pick the lowest
-                riderWorkloads.sort((a, b) => a.count - b.count);
-                bestRiderId = riderWorkloads[0].riderId;
             }
         }
 
@@ -392,8 +388,19 @@ export const handleBulkOrders = async (req, res) => {
                     continue;
                 }
 
-                // Auto-Assignment if rider found
-                if (status === "Accepted" && bestRiderId) {
+                // Auto-Assignment if riders available (distribute fairly)
+                if (status === "Accepted" && riderWorkloads.length > 0) {
+                    // 1. Find the minimum workload count among available riders
+                    const minCount = Math.min(...riderWorkloads.map(r => r.count));
+                    
+                    // 2. Get all riders with that min count (to handle ties with random selection)
+                    const candidates = riderWorkloads.filter(r => r.count === minCount);
+                    
+                    // 3. Pick a random rider from candidates
+                    const chosenRider = candidates[Math.floor(Math.random() * candidates.length)];
+                    const bestRiderId = chosenRider.riderId;
+
+                    // 4. Update order status and assigned rider
                     order.status = "Rider Assigned";
                     order.rider = bestRiderId;
                     order.statusHistory.push({
@@ -402,6 +409,9 @@ export const handleBulkOrders = async (req, res) => {
                         role: "retailer",
                         timestamp: new Date()
                     });
+
+                    // 5. Increment local workload so next order in THIS bulk request is balanced
+                    chosenRider.count++;
 
                     // ─── RIDER NOTIFICATION (Auto-Assign) ───────
                     createNotification(bestRiderId.toString(), {
