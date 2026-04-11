@@ -351,25 +351,32 @@ export const handleBulkOrders = async (req, res) => {
             return res.status(400).json({ success: false, message: `Invalid status. Must be one of: ${validStatuses.join(", ")}` });
         }
 
-        // ─── Find online riders and their current workloads ───
+        // ─── Find riders and their current workloads ───
         let riderWorkloads = [];
+        let ridersPoolSource = "online";
+
         if (status === "Accepted") {
             const RiderModel = (await import("../models/Rider.js")).default;
-            const onlineRiders = await RiderModel.find({ 
+            
+            // 1. Try to find riders who are NOT offline
+            let onlineRiders = await RiderModel.find({ 
                 retailer: retailerId, 
                 status: { $ne: "Offline" } 
             });
 
-            console.log(`[BulkProcess] Found ${onlineRiders.length} online riders for retailer ${retailerId}`);
+            // 2. Fallback: If everyone is offline, take all riders for this retailer (good for testing/emergency)
+            if (onlineRiders.length === 0) {
+                onlineRiders = await RiderModel.find({ retailer: retailerId });
+                ridersPoolSource = "all";
+            }
 
             if (onlineRiders.length > 0) {
-                // Count current active orders for each online rider
+                // Count current active orders for each rider in our pool
                 riderWorkloads = await Promise.all(onlineRiders.map(async (r) => {
                     const count = await Order.countDocuments({ 
                         rider: r.user, 
-                        status: { $in: ["Accepted", "Rider Assigned", "Rider Accepted", "Processing", "Preparing", "Shipped", "Out for Delivery"] } 
+                        status: { $in: ["Rider Assigned", "Rider Accepted", "Processing", "Preparing", "Shipped", "Out for Delivery"] } 
                     });
-                    console.log(`[BulkProcess] Rider ${r.user} has ${count} active orders`);
                     return { riderId: r.user.toString(), count };
                 }));
             }
@@ -391,21 +398,13 @@ export const handleBulkOrders = async (req, res) => {
                     continue;
                 }
 
-                // Auto-Assignment if riders available (distribute fairly)
+                // Auto-Assignment logic
                 if (status === "Accepted" && riderWorkloads.length > 0) {
-                    // 1. Find the minimum workload count among available riders
                     const minCount = Math.min(...riderWorkloads.map(r => r.count));
-                    
-                    // 2. Get all riders with that min count (to handle ties with random selection)
                     const candidates = riderWorkloads.filter(r => r.count === minCount);
-                    
-                    // 3. Pick a random rider from candidates
                     const chosenRider = candidates[Math.floor(Math.random() * candidates.length)];
                     const bestRiderId = chosenRider.riderId;
 
-                    console.log(`[BulkProcess] Assigning order ${order.orderId} to rider ${bestRiderId} (Load: ${chosenRider.count})`);
-
-                    // 4. Update order status and assigned rider
                     order.status = "Rider Assigned";
                     order.rider = bestRiderId;
                     order.statusHistory = order.statusHistory || [];
@@ -416,11 +415,11 @@ export const handleBulkOrders = async (req, res) => {
                         timestamp: new Date()
                     });
 
-                    // 5. Increment local workload so next order in THIS bulk request is balanced
+                    // Update local context for the next order in this loop
                     chosenRider.count++;
 
-                    // ─── RIDER NOTIFICATION (Auto-Assign) ───────
-                    createNotification(bestRiderId.toString(), {
+                    // Notification
+                    createNotification(bestRiderId, {
                         title: `New Assignment! 🛵`,
                         message: `You have been assigned to deliver order #${order.orderId.slice(-6).toUpperCase()}.`,
                         type: "Order",
@@ -440,7 +439,7 @@ export const handleBulkOrders = async (req, res) => {
                 });
                 await order.save();
 
-                // ─── CUSTOMER NOTIFICATION ──────────────────
+                // ─── Notifications ──────────────────
                 createNotification(order.user?.toString(), {
                     title: `Order Update! ${order.status === 'Delivered' ? '🎉' : '🚚'}`,
                     message: `Your order #${order.orderId.slice(-6).toUpperCase()} is now '${order.status}'.`,
@@ -449,7 +448,6 @@ export const handleBulkOrders = async (req, res) => {
                     onModel: "AppUser"
                 });
 
-                // ─── RETAILER NOTIFICATION ──────────────────
                 createNotification(retailerId.toString(), {
                     title: `Status Updated ✅`,
                     message: `Order #${order.orderId.slice(-6).toUpperCase()} set to '${order.status}'.`,
@@ -458,18 +456,14 @@ export const handleBulkOrders = async (req, res) => {
                     onModel: "User"
                 });
 
-                // Get rider name if assigned
+                // Emit real-time update
                 let riderDataToEmit = null;
                 if (order.rider) {
                     const User = (await import("../models/User.js")).default;
                     const riderUser = await User.findById(order.rider).select("name");
-                    riderDataToEmit = {
-                        id: order.rider,
-                        name: riderUser?.name || "Rider"
-                    };
+                    riderDataToEmit = { id: order.rider, name: riderUser?.name || "Rider" };
                 }
 
-                // Emit real-time update
                 emitOrderUpdate(order.orderId, order.status, {
                     orderId: order.orderId,
                     status: order.status,
@@ -486,7 +480,7 @@ export const handleBulkOrders = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            message: `Bulk processed ${results.length} order(s).`,
+            message: `Processed ${results.length} order(s) using ${riderWorkloads.length} ${ridersPoolSource} rider(s).`,
             processed: results.length,
             updated: results,
             failed: errors
