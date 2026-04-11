@@ -360,6 +360,8 @@ export const handleBulkOrders = async (req, res) => {
                 status: { $ne: "Offline" } 
             });
 
+            console.log(`[BulkProcess] Found ${onlineRiders.length} online riders for retailer ${retailerId}`);
+
             if (onlineRiders.length > 0) {
                 // Count current active orders for each online rider
                 riderWorkloads = await Promise.all(onlineRiders.map(async (r) => {
@@ -367,7 +369,8 @@ export const handleBulkOrders = async (req, res) => {
                         rider: r.user, 
                         status: { $in: ["Accepted", "Rider Assigned", "Rider Accepted", "Processing", "Preparing", "Shipped", "Out for Delivery"] } 
                     });
-                    return { riderId: r.user, count };
+                    console.log(`[BulkProcess] Rider ${r.user} has ${count} active orders`);
+                    return { riderId: r.user.toString(), count };
                 }));
             }
         }
@@ -400,9 +403,12 @@ export const handleBulkOrders = async (req, res) => {
                     const chosenRider = candidates[Math.floor(Math.random() * candidates.length)];
                     const bestRiderId = chosenRider.riderId;
 
+                    console.log(`[BulkProcess] Assigning order ${order.orderId} to rider ${bestRiderId} (Load: ${chosenRider.count})`);
+
                     // 4. Update order status and assigned rider
                     order.status = "Rider Assigned";
                     order.rider = bestRiderId;
+                    order.statusHistory = order.statusHistory || [];
                     order.statusHistory.push({
                         status: "Rider Assigned",
                         changedBy: retailerId,
