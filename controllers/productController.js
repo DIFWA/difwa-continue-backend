@@ -1,6 +1,7 @@
 import Product from "../models/Product.js";
 import { createNotification } from "../services/notificationService.js";
 import { emitProductUpdate } from "../services/socketService.js";
+import { checkAndNotifyLowStock } from "../services/stockService.js";
 
 // Get all products for the logged-in retailer
 export const getRetailerProducts = async (req, res) => {
@@ -54,6 +55,10 @@ export const updateProduct = async (req, res) => {
             { new: true, runValidators: true }
         ).populate("category", "name");
         if (!product) return res.status(404).json({ success: false, message: "Product not found" });
+        
+        // Check stock after update and emit
+        checkAndNotifyLowStock(product._id).catch(err => console.error("Low stock check failed", err));
+        
         // Emit real-time update to retailer's room
         emitProductUpdate("updated", product, req.user._id);
         res.status(200).json({ success: true, data: product });

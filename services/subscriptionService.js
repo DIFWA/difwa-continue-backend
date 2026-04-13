@@ -6,6 +6,7 @@ import { adjustBalance } from "./walletService.js";
 import mongoose from "mongoose";
 import AppUser from "../models/AppUser.js";
 import { getCurrentCommissionRate } from "../controllers/commissionController.js";
+import { checkAndNotifyLowStock } from "./stockService.js";
 
 export const createSubscription = async (userId, subscriptionData) => {
     // Basic validation: Check if product exists and user has min balance
@@ -187,6 +188,10 @@ export const generateDailyOrders = async (targetDate = new Date()) => {
                 }
                 import("./loyaltyService.js").then(module => module.awardLoyaltyPoints(sub.user, amount));
             }
+
+            // Deduct stock and alert if low
+            await Product.findByIdAndUpdate(sub.product._id, { $inc: { stock: -sub.quantity } });
+            checkAndNotifyLowStock(sub.product._id).catch(err => console.error("Low stock check failed", err));
 
             await sub.save();
 

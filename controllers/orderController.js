@@ -8,6 +8,7 @@ import * as walletService from "../services/walletService.js";
 import { emitOrderUpdate } from "../services/socketService.js";
 import { createNotification, notifyAdmins } from "../services/notificationService.js";
 import { getCurrentCommissionRate } from "./commissionController.js";
+import { checkAndNotifyLowStock } from "../services/stockService.js";
 
 // Helper: Sleep function for delays if needed
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -164,6 +165,11 @@ export const placeOrder = async (req, res) => {
             type: "Order",
             referenceId: createdOrder._id.toString()
         });
+
+        // Background Check Stock
+        for (const item of cartItems) {
+            checkAndNotifyLowStock(item.product._id).catch(err => console.error("Low stock check failed", err));
+        }
 
         // ─── ADMIN GLOBAL NOTIFICATION ──────────────────
         notifyAdmins({

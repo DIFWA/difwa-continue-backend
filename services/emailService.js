@@ -111,3 +111,31 @@ export const sendMarketingEmail = async (emails, subject, htmlContent) => {
         return false;
     }
 };
+
+export const sendLowStockEmail = async (email, productName, stockCount) => {
+    const mailOptions = {
+        from: `"Difwa Alert" <${process.env.EMAIL_USER}>`,
+        to: email,
+        subject: `Low Stock Alert: ${productName}`,
+        html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
+                <h2 style="color: #ef4444;">🚨 Low Stock Alert</h2>
+                <p>Your product <strong>${productName}</strong> is running low on stock.</p>
+                <div style="background-color: #fef2f2; padding: 15px; border-radius: 5px; margin: 20px 0; border: 1px solid #fee2e2;">
+                    <p style="color: #b91c1c; font-size: 1.2rem; margin: 0;"><strong>Current Stock: ${stockCount}</strong> ${stockCount <= 0 ? '(OUT OF STOCK)' : ''}</p>
+                </div>
+                <p>Please update your inventory as soon as possible to continue receiving orders.</p>
+                <hr style="border: 0; border-top: 1px solid #e0e0e0; margin: 20px 0;">
+                <p style="text-align: center; color: #9ca3af; font-size: 0.75rem;">© 2026 Difwa.</p>
+            </div>
+        `,
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        return true;
+    } catch (error) {
+        console.error("Error sending low stock email:", error);
+        return false;
+    }
+};

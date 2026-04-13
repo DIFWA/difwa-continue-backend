@@ -7,6 +7,7 @@ import { adjustBalance } from "../services/walletService.js";
 import { emitOrderUpdate, emitShopStatusUpdate } from "../services/socketService.js";
 import { createNotification, notifyAdmins } from "../services/notificationService.js";
 import { getCurrentCommissionRate } from "./commissionController.js";
+import { checkAndNotifyLowStock } from "../services/stockService.js";
 
 // Get all approved shops (retailers)
 export const getPublicShops = async (req, res) => {
@@ -477,6 +478,12 @@ export const createManualOrder = async (req, res) => {
             type: "Order",
             referenceId: order._id.toString()
         });
+
+        // Update Stock and trigger alert if low
+        for (const item of mappedItems) {
+            await Product.findByIdAndUpdate(item.product, { $inc: { stock: -item.quantity } });
+            checkAndNotifyLowStock(item.product).catch(err => console.error("Low stock check failed", err));
+        }
 
         res.status(201).json({ success: true, data: order });
     } catch (error) {
