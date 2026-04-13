@@ -338,6 +338,24 @@ export const getRetailerCustomers = async (req, res) => {
             }
         });
 
+        // Also fetch any manual customers added by this retailer directly
+        const manualCustomers = await AppUser.find({ addedByRetailer: retailerId, isManual: true });
+        
+        manualCustomers.forEach(user => {
+            const cId = user._id.toString();
+            if (!customerMap.has(cId)) {
+                // Customer has no orders yet, but exists
+                customerMap.set(cId, {
+                    user: user,
+                    orderCount: 0,
+                    totalSpend: 0,
+                    dueBalance: 0,
+                    lastOrderDate: null,
+                    orders: []
+                });
+            }
+        });
+
         const customers = Array.from(customerMap.values()).map(({ user, orderCount, totalSpend, dueBalance, lastOrderDate, orders }) => ({
             id: user._id,
             name: user.fullName || "Customer",
