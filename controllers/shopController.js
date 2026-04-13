@@ -700,6 +700,12 @@ export const addManualCustomer = async (req, res) => {
         const user = await AppUser.create({ ...req.body, addedByRetailer: req.user._id, isManual: true });
         res.status(201).json({ success: true, data: user });
     } catch (error) {
+        if (error.code === 11000 && error.keyPattern && error.keyPattern.phoneNumber) {
+            return res.status(400).json({ 
+                success: false, 
+                message: `A customer with the phone number ${req.body.phoneNumber || 'provided'} already exists.` 
+            });
+        }
         res.status(500).json({ success: false, message: error.message });
     }
 };
