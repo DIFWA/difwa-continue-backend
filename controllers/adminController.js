@@ -404,9 +404,27 @@ export const getAllOrders = async (req, res) => {
         }
 
         if (search) {
+            // Find User IDs by phone or name
+            const matchingUsers = await AppUser.find({
+                $or: [
+                    { fullName: { $regex: search, $options: "i" } },
+                    { phoneNumber: { $regex: search, $options: "i" } }
+                ]
+            }).select("_id");
+
+            // Find Retailer IDs by business name or name
+            const matchingRetailers = await User.find({
+                role: "retailer",
+                $or: [
+                    { name: { $regex: search, $options: "i" } },
+                    { "businessDetails.businessName": { $regex: search, $options: "i" } }
+                ]
+            }).select("_id");
+
             query.$or = [
                 { orderId: { $regex: search, $options: "i" } },
-                { status: { $regex: search, $options: "i" } }
+                { user: { $in: matchingUsers.map(u => u._id) } },
+                { "items.retailer": { $in: matchingRetailers.map(r => r._id) } }
             ];
         }
 
