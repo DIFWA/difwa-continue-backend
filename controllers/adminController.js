@@ -679,18 +679,27 @@ export const getGlobalTransactions = async (req, res) => {
         if (source && source !== "All") query.source = source;
 
         if (search) {
-            // Find user by name or email first if search is provided
-            const users = await AppUser.find({
+            // Search customers
+            const appUsers = await AppUser.find({
                 $or: [
                     { fullName: { $regex: search, $options: "i" } },
                     { phoneNumber: { $regex: search, $options: "i" } }
                 ]
             }).select("_id");
             
-            const userIds = users.map(u => u._id);
+            // Search retailers
+            const users = await User.find({
+                $or: [
+                    { name: { $regex: search, $options: "i" } },
+                    { phoneNumber: { $regex: search, $options: "i" } },
+                    { "businessDetails.businessName": { $regex: search, $options: "i" } }
+                ]
+            }).select("_id");
+            
+            const allUserIds = [...appUsers.map(u => u._id), ...users.map(u => u._id)];
             
             query.$or = [
-                { user: { $in: userIds } },
+                { user: { $in: allUserIds } },
                 { referenceId: { $regex: search, $options: "i" } },
                 { description: { $regex: search, $options: "i" } }
             ];
