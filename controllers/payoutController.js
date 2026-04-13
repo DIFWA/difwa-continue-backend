@@ -1,6 +1,7 @@
 import Payout from "../models/Payout.js";
 import User from "../models/User.js"; // Assuming Retailer is a type of User or related
 import AppUser from "../models/AppUser.js";
+import { notifyAdmins, createNotification } from "../services/notificationService.js";
 
 export const requestPayout = async (req, res) => {
     try {
@@ -15,6 +16,18 @@ export const requestPayout = async (req, res) => {
         });
 
         await payout.save();
+
+        // ─── NOTIFY ADMINS ──────────────────────────────
+        const retailer = await User.findById(retailerId).select("fullName businessDetails");
+        const shopName = retailer?.businessDetails?.businessName || retailer?.fullName || "A retailer";
+
+        notifyAdmins({
+            title: "💰 New Payout Request",
+            message: `${shopName} has requested a payout of ₹${amount.toLocaleString()}.`,
+            type: "Payout",
+            referenceId: payout._id.toString()
+        });
+
         res.status(201).json({ success: true, message: "Payout requested successfully", data: payout });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -23,8 +36,24 @@ export const requestPayout = async (req, res) => {
 
 export const getPayoutHistory = async (req, res) => {
     try {
-        const payouts = await Payout.find({ retailer: req.user.id }).sort({ createdAt: -1 });
-        res.json({ success: true, data: payouts });
+        const { page = 1, limit = 10 } = req.query;
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+
+        const total = await Payout.countDocuments({ retailer: req.user.id });
+        const payouts = await Payout.find({ retailer: req.user.id })
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(parseInt(limit));
+
+        res.json({ 
+            success: true, 
+            data: payouts,
+            pagination: {
+                total,
+                page: parseInt(page),
+                pages: Math.ceil(total / parseInt(limit))
+            }
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -43,6 +72,16 @@ export const approvePayout = async (req, res) => {
         payout.processedAt = Date.now();
 
         await payout.save();
+
+        // ─── NOTIFY RETAILER ─────────────────────────────
+        createNotification(payout.retailer.toString(), {
+            title: "✅ Payout Approved!",
+            message: `Your payout request for ₹${payout.amount.toLocaleString()} has been processed. Transaction ID: ${transactionId}`,
+            type: "Payout",
+            referenceId: payout._id.toString(),
+            onModel: "User"
+        });
+
         res.json({ success: true, message: "Payout approved", data: payout });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -50,53 +89,69 @@ export const approvePayout = async (req, res) => {
 };
 export const getAllPayouts = async (req, res) => {
     try {
-        const { search = "" } = req.query;
-        let query = {};
+        const { search = "", page = 1, limit = 10 } = req.query;
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+        const skip = (pageNum - 1) * limitNum;
+
+        let payouts = [];
+        let total = 0;
 
         if (search) {
-            query = {
-                $or: [
-                    { transactionId: { $regex: search, $options: 'i' } },
-                    { "retailer.businessDetails.businessName": { $regex: search, $options: 'i' } }
-                ]
-            };
-        }
-
-        // Note: MongoDB doesn't allow searching populated fields directly in find()
-        // So we'll have to use an aggregation or find and then filter, 
-        // but for simplicity here we'll search by transactionId and 
-        // filter the populated results if searching by shop name.
-        
-        let payouts = await Payout.find(search ? { transactionId: { $regex: search, $options: 'i' } } : {})
-            .populate('retailer', 'name email businessDetails')
-            .sort({ createdAt: -1 });
-
-        if (search) {
-            // Further filter by shop name if no results found by transaction ID
-            const filteredByShop = await Payout.find({})
+            // Find by transaction ID or shop name
+            // For search, we fetch and then filter/paginate manually because of population match
+            const allPayouts = await Payout.find({})
                 .populate({
                     path: 'retailer',
-                    match: { "businessDetails.businessName": { $regex: search, $options: 'i' } },
                     select: 'name email businessDetails'
                 })
                 .sort({ createdAt: -1 });
-            
-            // Filter out items where retailer didn't match the search
-            const shopResults = filteredByShop.filter(p => p.retailer !== null);
-            
-            // Merge and deduplicate
-            const txnIds = new Set(payouts.map(p => p._id.toString()));
-            shopResults.forEach(p => {
-                if (!txnIds.has(p._id.toString())) {
-                    payouts.push(p);
-                }
+
+            const filteredPayouts = allPayouts.filter(p => {
+                const matchesTxn = p.transactionId?.toLowerCase().includes(search.toLowerCase());
+                const matchesShop = p.retailer?.businessDetails?.businessName?.toLowerCase().includes(search.toLowerCase());
+                const matchesName = p.retailer?.name?.toLowerCase().includes(search.toLowerCase());
+                return matchesTxn || matchesShop || matchesName;
             });
-            
-            // Re-sort by createdAt desc
-            payouts.sort((a, b) => b.createdAt - a.createdAt);
+
+            total = filteredPayouts.length;
+            payouts = filteredPayouts.slice(skip, skip + limitNum);
+        } else {
+            total = await Payout.countDocuments({});
+            payouts = await Payout.find({})
+                .populate('retailer', 'name email businessDetails')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limitNum);
         }
 
-        res.json({ success: true, data: payouts });
+        const statsRes = await Payout.aggregate([
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: "$amount" },
+                    pending: {
+                        $sum: { $cond: [{ $eq: ["$status", "Pending"] }, "$amount", 0] }
+                    },
+                    approved: {
+                        $sum: { $cond: [{ $eq: ["$status", "Approved"] }, "$amount", 0] }
+                    }
+                }
+            }
+        ]);
+
+        const stats = statsRes[0] || { total: 0, pending: 0, approved: 0 };
+
+        res.json({ 
+            success: true, 
+            data: payouts,
+            pagination: {
+                total,
+                page: pageNum,
+                pages: Math.ceil(total / limitNum)
+            },
+            stats
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
