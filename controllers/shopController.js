@@ -157,11 +157,42 @@ export const getRetailerDashboardStats = async (req, res) => {
             });
         });
 
+        // Generate Chart Data (Last 7 Days)
+        const chartData = [];
+        for (let i = 6; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            const dateStr = date.toLocaleDateString('en-IN', { weekday: 'short' });
+            
+            // Calculate sales for this retailer on this day
+            let dailySales = 0;
+            orders.forEach(order => {
+                const orderDate = new Date(order.createdAt);
+                if (orderDate.toDateString() === date.toDateString()) {
+                    order.items.forEach(item => {
+                        if (item.retailer.toString() === retailerId) {
+                            dailySales += (item.price || 0) * (item.quantity || 0);
+                        }
+                    });
+                }
+            });
+
+            chartData.push({ name: dateStr, sales: dailySales });
+        }
+
         res.status(200).json({
             success: true,
             data: {
-                stats: { totalRevenue, totalOrders, newOrders: newOrdersCount, activeProducts, totalCustomers: customerIds.size, isShopActive: (await User.findById(retailerId)).isShopActive },
-                recentActivities: recentActivities.slice(0, 10)
+                stats: { 
+                    totalRevenue, 
+                    totalOrders, 
+                    newOrders: newOrdersCount, 
+                    activeProducts, 
+                    totalCustomers: customerIds.size, 
+                    isShopActive: (await User.findById(retailerId)).isShopActive 
+                },
+                recentActivities: recentActivities.slice(0, 10),
+                chartData
             }
         });
     } catch (error) {
