@@ -8,6 +8,7 @@ import Review from "../models/Review.js";
 import Payout from "../models/Payout.js";
 import Favorite from "../models/Favorite.js";
 import Subscription from "../models/Subscription.js";
+import Transaction from "../models/Transaction.js";
 import bcrypt from "bcryptjs";
 import { sendInviteEmail } from "../services/emailService.js";
 // --- CATEGORY CONTROLLERS ---
@@ -640,6 +641,78 @@ export const deleteAdminUser = async (req, res) => {
 
         await User.findByIdAndDelete(id);
         res.status(200).json({ success: true, message: "Admin user deleted successfully" });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// --- GLOBAL TRANSACTION DASHBOARD ---
+export const getGlobalTransactions = async (req, res) => {
+    try {
+        const { search = "", page = 1, limit = 20, type, status, source } = req.query;
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+        const skip = (pageNum - 1) * limitNum;
+
+        const query = {};
+
+        if (type && type !== "All") query.type = type;
+        if (status && status !== "All") query.status = status;
+        if (source && source !== "All") query.source = source;
+
+        if (search) {
+            // Find user by name or email first if search is provided
+            const users = await AppUser.find({
+                $or: [
+                    { fullName: { $regex: search, $options: "i" } },
+                    { phoneNumber: { $regex: search, $options: "i" } }
+                ]
+            }).select("_id");
+            
+            const userIds = users.map(u => u._id);
+            
+            query.$or = [
+                { user: { $in: userIds } },
+                { referenceId: { $regex: search, $options: "i" } },
+                { description: { $regex: search, $options: "i" } }
+            ];
+        }
+
+        const total = await Transaction.countDocuments(query);
+        const transactions = await Transaction.find(query)
+            .populate("user", "fullName phoneNumber email")
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limitNum);
+
+        // Stats for the dashboard
+        const totalInflow = await Transaction.aggregate([
+            { $match: { type: "Credit", status: "Success" } },
+            { $group: { _id: null, total: { $sum: "$amount" } } }
+        ]);
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayInflow = await Transaction.aggregate([
+            { $match: { type: "Credit", status: "Success", createdAt: { $gte: today } } },
+            { $group: { _id: null, total: { $sum: "$amount" } } }
+        ]);
+
+        res.status(200).json({
+            success: true,
+            data: transactions,
+            stats: {
+                totalInflow: totalInflow[0]?.total || 0,
+                todayInflow: todayInflow[0]?.total || 0,
+                transactionCount: total
+            },
+            pagination: {
+                total,
+                page: pageNum,
+                limit: limitNum,
+                pages: Math.ceil(total / limitNum)
+            }
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
