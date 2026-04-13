@@ -14,6 +14,7 @@ import { toggleShopStatus, finalizeOrderWeight, getRetailerDashboardStats, getRe
 import { searchAnything } from "../controllers/retailerSearchController.js";
 import { getDailyPrepList } from "../services/prepService.js";
 import { handleBulkOrders } from "../controllers/orderController.js";
+import { getBankAccounts, addBankAccount, deleteBankAccount, setDefaultBankAccount } from "../controllers/bankController.js";
 
 const router = express.Router();
 
@@ -45,6 +46,12 @@ router.post("/assign-rider", protect, retailerOnly, assignRiderToOrder);
 
 // Reviews
 router.get("/reviews", protect, retailerOnly, getRetailerReviews);
+
+// Bank Accounts
+router.get("/banks", protect, retailerOnly, getBankAccounts);
+router.post("/banks", protect, retailerOnly, addBankAccount);
+router.delete("/banks/:id", protect, retailerOnly, deleteBankAccount);
+router.patch("/banks/:id/default", protect, retailerOnly, setDefaultBankAccount);
 
 // Prep List
 router.get("/prep-list", protect, retailerOnly, async (req, res) => {

@@ -21,7 +21,13 @@ const payoutSchema = new mongoose.Schema({
     },
     processedAt: Date,
     adminComment: String,
-    transactionId: String // Payment gateway reference
+    transactionId: String, // Payment gateway reference
+    bankDetails: {
+        bankName: String,
+        accountHolderName: String,
+        accountNumber: String,
+        ifscCode: String
+    }
 }, { timestamps: true });
 
 export default mongoose.model("Payout", payoutSchema);
