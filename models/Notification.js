@@ -23,7 +23,7 @@ const notificationSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ["Order", "Rider", "Inventory", "System", "RetailerRegistration"],
+        enum: ["Order", "Rider", "Inventory", "System", "RetailerRegistration", "Payout"],
         default: "System"
     },
     referenceId: {
