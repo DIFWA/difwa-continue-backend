@@ -174,29 +174,89 @@ import Payout from "../models/Payout.js";
 export const getRetailerRevenueStats = async (req, res) => {
     try {
         const retailerId = req.user._id;
-        const orders = await Order.find({ "items.retailer": retailerId });
-        let totalGross = 0;
-        let totalCommission = 0;
-        orders.forEach(order => {
-            let orderGross = 0;
-            order.items.forEach(item => {
-                if (item.retailer && item.retailer.toString() === retailerId.toString()) orderGross += item.price * item.quantity;
-            });
-            if (orderGross === 0) return;
-            const rate = order.commissionRate || 0;
-            const commission = parseFloat(((orderGross * rate) / 100).toFixed(2));
-            totalGross += orderGross;
-            totalCommission += commission;
-        });
+        const { range, startDate, endDate } = req.query;
 
-        const totalNet = totalGross - totalCommission;
+        // Base query for orders: must belong to retailer and be finalized
+        const baseQuery = { 
+            "items.retailer": retailerId,
+            status: { $in: ["Delivered", "Completed"] } 
+        };
+
+        // Time Filter logic
+        let dateFilter = {};
+        const now = new Date();
+        
+        if (range === 'today') {
+            const start = new Date(now.setHours(0, 0, 0, 0));
+            dateFilter = { createdAt: { $gte: start } };
+        } else if (range === 'yesterday') {
+            const start = new Date(now.setDate(now.getDate() - 1));
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(start);
+            end.setHours(23, 59, 59, 999);
+            dateFilter = { createdAt: { $gte: start, $lte: end } };
+        } else if (range === 'week') {
+            const start = new Date(now.setDate(now.getDate() - 7));
+            dateFilter = { createdAt: { $gte: start } };
+        } else if (range === 'month') {
+            const start = new Date(now.getFullYear(), now.getMonth(), 1);
+            dateFilter = { createdAt: { $gte: start } };
+        } else if (range === 'custom' && startDate && endDate) {
+            dateFilter = { createdAt: { $gte: new Date(startDate), $lte: new Date(endDate) } };
+        }
+
+        // Apply date filter to specifically range-based stats
+        const filteredQuery = { ...baseQuery, ...dateFilter };
+
+        // 1. Fetch Lifetime Orders (for Available Balance & Lifetime Gross)
+        const lifetimeOrders = await Order.find(baseQuery);
+        
+        // 2. Fetch Filtered Orders (for "Estimated Earnings" of the current range)
+        const rangeOrders = await Order.find(filteredQuery);
+
+        // Helper to sum gross and commission from a list of orders
+        const calculateStats = (orderList) => {
+            let gross = 0;
+            let commission = 0;
+            orderList.forEach(order => {
+                let orderGross = 0;
+                order.items.forEach(item => {
+                    if (item.retailer && item.retailer.toString() === retailerId.toString()) {
+                        orderGross += item.price * item.quantity;
+                    }
+                });
+                if (orderGross > 0) {
+                    const rate = order.commissionRate || 0;
+                    const comm = parseFloat(((orderGross * rate) / 100).toFixed(2));
+                    gross += orderGross;
+                    commission += comm;
+                }
+            });
+            return { gross, commission, net: gross - commission };
+        };
+
+        const lifetime = calculateStats(lifetimeOrders);
+        const currentRangeStats = calculateStats(rangeOrders);
+
+        // 3. Payouts Logic
         const payouts = await Payout.find({ retailer: retailerId });
         let totalSettled = 0;
         payouts.forEach(p => { if (p.status === 'Approved') totalSettled += p.amount; });
 
+        // 4. Get Current Active Commission Rate (for display)
+        const activeRate = await getCurrentCommissionRate();
+
         res.status(200).json({
             success: true,
-            data: { availableBalance: (totalNet - totalSettled).toFixed(2), totalEarnings: totalNet.toFixed(2), totalSettled: totalSettled.toFixed(2) }
+            data: { 
+                availableBalance: (lifetime.net - totalSettled).toFixed(2), 
+                estimatedEarnings: currentRangeStats.net.toFixed(2), // This reflects the net for the selected range
+                totalSettled: totalSettled.toFixed(2),
+                totalEarnings: lifetime.net.toFixed(2), // Net Lifetime
+                totalGrossEarnings: lifetime.gross.toFixed(2),
+                totalCommissionDeducted: lifetime.commission.toFixed(2),
+                commissionRate: activeRate
+            }
         });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
