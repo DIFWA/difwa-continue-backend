@@ -165,23 +165,31 @@ export const emitRiderAssigned = async (orderId, userId, riderInfo) => {
     if (io) {
         io.to(room).emit("riderAssigned", payload);
     }
+    // ... relay logic same as before but for simplicity I will just add the new function below
+};
+
+export const emitOrderDelivered = async (orderId, userId) => {
+    const room = `user_${userId}`;
+    const payload = { orderId };
+
+    _log("Emitting orderDelivered for Rating Popup", { data: { room, orderId } });
+
+    if (io) {
+        io.to(room).emit("orderDelivered", payload);
+    }
 
     const relayUrl = process.env.SOCKET_RELAY_URL;
     if (relayUrl) {
-        try {
-            await fetch(`${relayUrl}/emit`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    secret: process.env.SOCKET_SECRET || "shrimpbite_socket_relay_secret_2026",
-                    event: "riderAssigned",
-                    room: room,
-                    data: payload
-                })
-            });
-        } catch (error) {
-            console.error("Relay riderAssigned emit failed:", error.message);
-        }
+        fetch(`${relayUrl}/emit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                secret: process.env.SOCKET_SECRET || "shrimpbite_socket_relay_secret_2026",
+                event: "orderDelivered",
+                room: room,
+                data: payload
+            })
+        }).catch(err => console.error("Relay orderDelivered emit failed:", err.message));
     }
 };
 

@@ -73,3 +73,58 @@ export const getProductReviews = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+// @desc    Submit multiple product reviews for an order
+// @route   POST /api/reviews/submit-order
+// @access  Private (AppUser)
+export const submitOrderReviews = async (req, res) => {
+    try {
+        const { orderId, productReviews } = req.body;
+        const userId = req.user._id;
+
+        if (!orderId || !productReviews || !Array.isArray(productReviews)) {
+            return res.status(400).json({ success: false, message: "Invalid review data" });
+        }
+
+        const order = await Order.findOne({ orderId, user: userId });
+        if (!order) {
+            return res.status(404).json({ success: false, message: "Order not found or unauthorized" });
+        }
+
+        const reviewPromises = productReviews.map(async (review) => {
+            const { productId, rating, comment, tags } = review;
+            
+            // Find retailer for this product in the order
+            const orderItem = order.items.find(item => item.product.toString() === productId.toString());
+            const retailerId = orderItem ? orderItem.retailer : null;
+
+            if (!retailerId) return null; // Should not happen if data is clean
+
+            // Check if already reviewed
+            const exists = await Review.findOne({ user: userId, order: order._id, product: productId });
+            if (exists) return null;
+
+            return Review.create({
+                user: userId,
+                product: productId,
+                retailer: retailerId,
+                order: order._id,
+                rating: Number(rating),
+                comment: comment || "",
+                tags: tags || []
+            });
+        });
+
+        const results = await Promise.all(reviewPromises);
+        const successfulReviews = results.filter(r => r !== null);
+
+        res.status(201).json({
+            success: true,
+            message: `${successfulReviews.length} reviews submitted successfully`,
+            data: successfulReviews
+        });
+
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

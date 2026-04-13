@@ -684,8 +684,58 @@ export const assignRiderToOrder = async (req, res) => {
 import Review from "../models/Review.js";
 export const getRetailerReviews = async (req, res) => {
     try {
-        const reviews = await Review.find({ retailer: req.user._id }).populate("user", "fullName").populate("product", "name").sort({ createdAt: -1 });
-        res.status(200).json({ success: true, data: { reviews } });
+        const retailerId = req.user._id;
+        const reviews = await Review.find({ retailer: retailerId })
+            .populate("user", "fullName")
+            .populate("product", "name image")
+            .sort({ createdAt: -1 });
+
+        // Calculate Stats
+        const totalReviews = reviews.length;
+        let totalStars = 0;
+        let positiveCount = 0;
+        const distribution = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+
+        reviews.forEach(r => {
+            const rating = Math.round(r.rating);
+            totalStars += r.rating;
+            if (rating >= 4) positiveCount++;
+            if (distribution[rating] !== undefined) distribution[rating]++;
+        });
+
+        const averageRating = totalReviews > 0 ? (totalStars / totalReviews).toFixed(1) : "0.0";
+        const positivePercentage = totalReviews > 0 ? Math.round((positiveCount / totalReviews) * 100) : 0;
+
+        // Convert distribution to percentages for frontend
+        const distributionPercent = {};
+        [5, 4, 3, 2, 1].forEach(star => {
+            distributionPercent[star] = totalReviews > 0 ? Math.round((distribution[star] / totalReviews) * 100) : 0;
+        });
+
+        // Format reviews list for frontend
+        const formattedReviews = reviews.map(r => ({
+            id: r._id,
+            user: r.user?.fullName || "Valued Customer",
+            isVerified: true, // If they order it's verified
+            date: new Date(r.createdAt).toLocaleDateString("en-IN", { day: '2-digit', month: 'long', year: 'numeric' }),
+            product: r.product?.name || "Product",
+            rating: r.rating,
+            comment: r.comment,
+            tags: r.tags || []
+        }));
+
+        res.status(200).json({ 
+            success: true, 
+            data: { 
+                reviews: formattedReviews,
+                stats: {
+                    averageRating,
+                    totalReviews,
+                    positivePercentage,
+                    distribution: distributionPercent
+                }
+            } 
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
