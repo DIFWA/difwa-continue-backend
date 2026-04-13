@@ -19,7 +19,8 @@ import {
     getAdminUsers,
     updateAdminUser,
     deleteAdminUser,
-    getGlobalTransactions
+    getGlobalTransactions,
+    getGlobalSearch
 } from "../controllers/adminController.js";
 import {
     getSubscriptionPlans,
@@ -81,5 +82,8 @@ router.delete("/admins/:id", protect, adminOnly, deleteAdminUser)
 
 // Global Transactions
 router.get("/all-transactions", protect, adminOnly, getGlobalTransactions)
+
+// Global Search
+router.get("/search", protect, adminOnly, getGlobalSearch)
 
 export default router;

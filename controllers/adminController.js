@@ -754,3 +754,60 @@ export const getGlobalTransactions = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+// --- GLOBAL SEARCH SYSTEM ---
+export const getGlobalSearch = async (req, res) => {
+    try {
+        const { q = "" } = req.query;
+        if (!q || q.length < 2) return res.status(200).json({ success: true, results: [] });
+
+        const searchRegex = { $regex: q, $options: "i" };
+
+        // 1. Search App Users (Customers)
+        const appUsers = await AppUser.find({
+            $or: [
+                { fullName: searchRegex },
+                { phoneNumber: searchRegex },
+                { email: searchRegex }
+            ]
+        }).limit(3).select("fullName phoneNumber profilePicture");
+
+        // 2. Search Retailers
+        const retailers = await User.find({
+            role: "retailer",
+            $or: [
+                { name: searchRegex },
+                { "businessDetails.businessName": searchRegex },
+                { phoneNumber: searchRegex }
+            ]
+        }).limit(3).select("name businessDetails");
+
+        // 3. Search Orders
+        const orders = await Order.find({
+            $or: [
+                { orderId: searchRegex },
+                { status: searchRegex }
+            ]
+        }).limit(4).select("orderId totalAmount status");
+
+        // 4. Search Transactions
+        const transactions = await Transaction.find({
+            $or: [
+                { referenceId: searchRegex },
+                { description: searchRegex },
+                { $expr: { $regexMatch: { input: { $toString: "$_id" }, regex: q, options: "i" } } }
+            ]
+        }).limit(3).select("referenceId amount type");
+
+        // Format unified results
+        const results = [];
+
+        appUsers.forEach(u => results.push({ id: u._id, title: u.fullName, subtitle: u.phoneNumber, category: "Customer", url: `/admin/app-users?search=${u.phoneNumber}` }));
+        retailers.forEach(r => results.push({ id: r._id, title: r.businessDetails?.businessName || r.name, subtitle: "Retailer Shop", category: "Retailer", url: `/admin/retailers?search=${r.businessDetails?.businessName || r.name}` }));
+        orders.forEach(o => results.push({ id: o._id, title: o.orderId, subtitle: `₹${o.totalAmount} • ${o.status}`, category: "Order", url: `/admin/orders?search=${o.orderId}` }));
+        transactions.forEach(t => results.push({ id: t._id, title: t.referenceId || "Platform Txn", subtitle: `${t.type} • ₹${t.amount}`, category: "Transaction", url: `/admin/transactions?search=${t.referenceId || t._id}` }));
+
+        res.status(200).json({ success: true, results });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
