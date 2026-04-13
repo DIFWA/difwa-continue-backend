@@ -668,17 +668,21 @@ export const getRetailerReviews = async (req, res) => {
 
 export const getDueOrdersForCustomer = async (req, res) => {
     try {
+        const { type = 'due' } = req.query;
+        const paymentFilter = type === 'paid' ? 'Paid' : 'Due';
+        
         const retailer = await User.findById(req.user._id).select('businessDetails.shopName email');
         const customer = await AppUser.findById(req.params.customerId).select('fullName phoneNumber addresses');
-        const orders = await Order.find({ user: req.params.customerId, "items.retailer": req.user._id, paymentStatus: "Due" }).sort({ createdAt: -1 });
+        const orders = await Order.find({ user: req.params.customerId, "items.retailer": req.user._id, paymentStatus: paymentFilter }).sort({ createdAt: -1 });
         
-        const totalDue = orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+        const totalDue = type === 'paid' ? 0 : orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
         
         res.status(200).json({ 
             success: true, 
             data: { 
                 orders,
                 totalDue: totalDue.toFixed(2),
+                type,
                 customer,
                 retailer: {
                     name: retailer?.businessDetails?.shopName || 'Retailer',
