@@ -701,7 +701,9 @@ export const getGlobalTransactions = async (req, res) => {
             query.$or = [
                 { user: { $in: allUserIds } },
                 { referenceId: { $regex: search, $options: "i" } },
-                { description: { $regex: search, $options: "i" } }
+                { description: { $regex: search, $options: "i" } },
+                // This allows searching by the MongoDB _id string
+                { $expr: { $regexMatch: { input: { $toString: "$_id" }, regex: search, options: "i" } } }
             ];
         }
 
@@ -712,25 +714,33 @@ export const getGlobalTransactions = async (req, res) => {
             .skip(skip)
             .limit(limitNum);
 
-        // Stats for the dashboard
-        const totalInflow = await Transaction.aggregate([
-            { $match: { type: "Credit", status: "Success" } },
-            { $group: { _id: null, total: { $sum: "$amount" } } }
-        ]);
-
+        // --- PERFORMANCE OPTIMIZATION: One-pass Stats ---
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const todayInflow = await Transaction.aggregate([
-            { $match: { type: "Credit", status: "Success", createdAt: { $gte: today } } },
-            { $group: { _id: null, total: { $sum: "$amount" } } }
+
+        const statsResult = await Transaction.aggregate([
+            { $match: { type: "Credit", status: "Success" } },
+            {
+                $group: {
+                    _id: null,
+                    totalInflow: { $sum: "$amount" },
+                    todayInflow: {
+                        $sum: {
+                            $cond: [{ $gte: ["$createdAt", today] }, "$amount", 0]
+                        }
+                    }
+                }
+            }
         ]);
+
+        const platformStats = statsResult[0] || { totalInflow: 0, todayInflow: 0 };
 
         res.status(200).json({
             success: true,
             data: transactions,
             stats: {
-                totalInflow: totalInflow[0]?.total || 0,
-                todayInflow: todayInflow[0]?.total || 0,
+                totalInflow: platformStats.totalInflow,
+                todayInflow: platformStats.todayInflow,
                 transactionCount: total
             },
             pagination: {
