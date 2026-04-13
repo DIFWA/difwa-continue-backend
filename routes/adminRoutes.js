@@ -16,6 +16,8 @@ import {
     inviteAdminUser,
     changeAdminPassword,
     deleteRetailer,
+    getAdminUsers,
+    updateAdminUser,
     deleteAdminUser,
     getGlobalTransactions
 } from "../controllers/adminController.js";
