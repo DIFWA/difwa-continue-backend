@@ -2,6 +2,8 @@ node tmp/create_pending_order.js
 
 chmod 400 /Users/rajesh/Documents/other/difwa/difwa-continue-backend/difwapem.pem
 13.51.98.93
+
+
 ssh -i /Users/rajesh/Documents/other/difwa/difwa-continue-backend/difwapem.pem ubuntu@13.51.98.93
 
 sudo apt update && sudo apt upgrade -y
