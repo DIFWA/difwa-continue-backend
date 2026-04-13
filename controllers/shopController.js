@@ -249,8 +249,8 @@ export const getRetailerRevenueStats = async (req, res) => {
         res.status(200).json({
             success: true,
             data: { 
-                availableBalance: (lifetime.net - totalSettled).toFixed(2), 
-                estimatedEarnings: currentRangeStats.net.toFixed(2), // This reflects the net for the selected range
+                availableBalance: Math.max(0, lifetime.net - totalSettled).toFixed(2), 
+                estimatedEarnings: Math.max(0, currentRangeStats.net).toFixed(2), // This reflects the net for the selected range
                 totalSettled: totalSettled.toFixed(2),
                 totalEarnings: lifetime.net.toFixed(2), // Net Lifetime
                 totalGrossEarnings: lifetime.gross.toFixed(2),
