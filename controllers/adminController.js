@@ -437,13 +437,13 @@ export const getAllOrders = async (req, res) => {
                     completedOrders,
                     canceledOrders,
                     avgOrderValue: "0.00"
+                },
+                pagination: {
+                    totalOrders,
+                    totalPages: Math.ceil(totalOrders / limit),
+                    currentPage: parseInt(page),
+                    limit: parseInt(limit)
                 }
-            },
-            pagination: {
-                totalOrders,
-                totalPages: Math.ceil(totalOrders / limit),
-                currentPage: parseInt(page),
-                limit: parseInt(limit)
             }
         });
     } catch (error) {
