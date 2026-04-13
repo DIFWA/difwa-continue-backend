@@ -2,6 +2,7 @@ import Payout from "../models/Payout.js";
 import User from "../models/User.js"; // Assuming Retailer is a type of User or related
 import AppUser from "../models/AppUser.js";
 import { notifyAdmins, createNotification } from "../services/notificationService.js";
+import { emitPayoutUpdate } from "../services/socketService.js";
 
 export const requestPayout = async (req, res) => {
     try {
@@ -27,6 +28,8 @@ export const requestPayout = async (req, res) => {
             type: "Payout",
             referenceId: payout._id.toString()
         });
+
+        emitPayoutUpdate(payout._id.toString(), 'Pending', payout, retailerId);
 
         res.status(201).json({ success: true, message: "Payout requested successfully", data: payout });
     } catch (error) {
@@ -81,6 +84,8 @@ export const approvePayout = async (req, res) => {
             referenceId: payout._id.toString(),
             onModel: "User"
         });
+
+        emitPayoutUpdate(payout._id.toString(), 'Approved', payout, payout.retailer.toString());
 
         res.json({ success: true, message: "Payout approved", data: payout });
     } catch (error) {

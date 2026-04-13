@@ -213,6 +213,7 @@ export const emitChatUpdate = async (chatId, message) => {
 };
 
 export const emitNotification = async (recipientId, notification) => {
+    // 1. Send to the recipient's specific notification room
     const room = `retailer_notifications_${recipientId}`;
     const payload = { ...notification, createdAt: new Date() };
 
@@ -238,6 +239,38 @@ export const emitNotification = async (recipientId, notification) => {
         } catch (error) {
             console.error("Relay notification emit failed:", error.message);
         }
+    }
+};
+
+/**
+ * Emits a payout status update to the retailer and admins.
+ */
+export const emitPayoutUpdate = async (payoutId, status, data, retailerId) => {
+    const rooms = [`retailer_${retailerId}`, "admin"];
+    const payload = { payoutId, status, data };
+
+    _log("Emitting Payout Update", { data: { payoutId, status, retailerId } });
+
+    if (io) {
+        rooms.forEach(room => {
+            io.to(room).emit("payoutUpdate", payload);
+        });
+    }
+
+    const relayUrl = process.env.SOCKET_RELAY_URL;
+    if (relayUrl) {
+        Promise.all(rooms.map(room => 
+            fetch(`${relayUrl}/emit`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    secret: process.env.SOCKET_SECRET || "shrimpbite_socket_relay_secret_2026",
+                    event: "payoutUpdate",
+                    room: room,
+                    data: payload
+                })
+            })
+        )).catch(err => console.error("Relay payout update failed:", err.message));
     }
 };
 
