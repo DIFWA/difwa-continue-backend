@@ -358,17 +358,9 @@ export const handleBulkOrders = async (req, res) => {
         if (status === "Accepted") {
             const RiderModel = (await import("../models/Rider.js")).default;
             
-            // 1. Try to find riders who are NOT offline
-            let onlineRiders = await RiderModel.find({ 
-                retailer: retailerId, 
-                status: { $ne: "Offline" } 
-            });
-
-            // 2. Fallback: If everyone is offline, take all riders for this retailer (good for testing/emergency)
-            if (onlineRiders.length === 0) {
-                onlineRiders = await RiderModel.find({ retailer: retailerId });
-                ridersPoolSource = "all";
-            }
+            // Fetch all riders for this retailer regardless of status
+            const onlineRiders = await RiderModel.find({ retailer: retailerId });
+            ridersPoolSource = "all";
 
             if (onlineRiders.length > 0) {
                 // Count current active orders for each rider in our pool
