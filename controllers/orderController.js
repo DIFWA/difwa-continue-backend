@@ -100,6 +100,9 @@ export const placeOrder = async (req, res) => {
             throw new Error("Retailer not identified for items.");
         }
 
+        // 4. Create Order ID first (so we can use it for the ledger)
+        const orderId = `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
         // 3. Wallet Balance Check & Deduction
         if (paymentMethod === "Wallet") {
             const user = await AppUser.findById(userId).session(session);
@@ -107,7 +110,8 @@ export const placeOrder = async (req, res) => {
                 throw new Error(`Insufficient wallet balance. Total: ₹${totalAmount}, Current: ₹${user?.walletBalance || 0}`);
             }
 
-            await walletService.adjustBalance(userId, "appUser", totalAmount, "Debit", "Order Payment", "Order", null, session);
+            // Pass orderId as the referenceId (7th argument)
+            await walletService.adjustBalance(userId, "appUser", totalAmount, "Debit", "Order Payment", "Order", orderId, session);
         }
 
         // 4. Commission logic
@@ -115,7 +119,6 @@ export const placeOrder = async (req, res) => {
         const commissionAmount = parseFloat(((totalAmount * commissionRate) / 100).toFixed(2));
 
         // 5. Create Order
-        const orderId = `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
         const orderResults = await Order.create([{
             orderId,
             user: userId,
