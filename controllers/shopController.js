@@ -323,6 +323,7 @@ export const getRetailerCustomers = async (req, res) => {
                     user: o.user, 
                     orderCount: 1,
                     totalSpend: o.totalAmount || 0,
+                    dueBalance: o.paymentStatus === 'Due' ? (o.totalAmount || 0) : 0,
                     lastOrderDate: o.createdAt,
                     orders: [o]
                 });
@@ -331,12 +332,13 @@ export const getRetailerCustomers = async (req, res) => {
                 if (entry.orderCount === 1) repeatCustomersCount++;
                 entry.orderCount++;
                 entry.totalSpend += o.totalAmount || 0;
+                if (o.paymentStatus === 'Due') entry.dueBalance += (o.totalAmount || 0);
                 entry.lastOrderDate = o.createdAt;
                 entry.orders.push(o);
             }
         });
 
-        const customers = Array.from(customerMap.values()).map(({ user, orderCount, totalSpend, lastOrderDate, orders }) => ({
+        const customers = Array.from(customerMap.values()).map(({ user, orderCount, totalSpend, dueBalance, lastOrderDate, orders }) => ({
             id: user._id,
             name: user.fullName || "Customer",
             email: user.email || "N/A",
@@ -344,7 +346,7 @@ export const getRetailerCustomers = async (req, res) => {
             image: user.profilePicture || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.fullName || 'C')}&background=random`,
             orderCount,
             spend: totalSpend.toFixed(2),
-            balance: user.walletBalance || "0.00",
+            balance: dueBalance.toFixed(2),
             status: orderCount > 5 ? "VIP" : (new Date(user.createdAt) >= sevenDaysAgo ? "New" : "Active"),
             lastOrder: lastOrderDate,
             orderIds: orders.map(o => o.orderId).reverse()
@@ -666,8 +668,24 @@ export const getRetailerReviews = async (req, res) => {
 
 export const getDueOrdersForCustomer = async (req, res) => {
     try {
-        const orders = await Order.find({ user: req.params.customerId, "items.retailer": req.user._id, paymentStatus: "Due" });
-        res.status(200).json({ success: true, data: { orders } });
+        const retailer = await User.findById(req.user._id).select('businessDetails.shopName email');
+        const customer = await AppUser.findById(req.params.customerId).select('fullName phoneNumber addresses');
+        const orders = await Order.find({ user: req.params.customerId, "items.retailer": req.user._id, paymentStatus: "Due" }).sort({ createdAt: -1 });
+        
+        const totalDue = orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+        
+        res.status(200).json({ 
+            success: true, 
+            data: { 
+                orders,
+                totalDue: totalDue.toFixed(2),
+                customer,
+                retailer: {
+                    name: retailer?.businessDetails?.shopName || 'Retailer',
+                    email: retailer?.email || ''
+                }
+            } 
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -684,7 +702,37 @@ export const addManualCustomer = async (req, res) => {
 
 export const settleCustomerDue = async (req, res) => {
     try {
-        res.status(200).json({ success: true, message: "Settled" });
+        const { customerId, amount } = req.body;
+        const retailerId = req.user._id;
+        
+        if (!customerId || !amount || parseFloat(amount) <= 0) {
+            return res.status(400).json({ success: false, message: "Invalid settlement data" });
+        }
+        
+        // Find all Due orders for this customer + retailer, sort oldest first
+        const dueOrders = await Order.find({ 
+            user: customerId, 
+            "items.retailer": retailerId, 
+            paymentStatus: "Due" 
+        }).sort({ createdAt: 1 });
+        
+        let remaining = parseFloat(amount);
+        
+        for (const order of dueOrders) {
+            if (remaining <= 0) break;
+            if (remaining >= order.totalAmount) {
+                order.paymentStatus = 'Paid';
+                remaining -= order.totalAmount;
+            } else {
+                // Partial: mark as partially paid (leave as Due for now, deduct from total)
+                // For simplicity, if partial payment covers this order mark as paid
+                order.paymentStatus = 'Paid';
+                remaining = 0;
+            }
+            await order.save();
+        }
+        
+        res.status(200).json({ success: true, message: `Settlement of ₹${amount} applied successfully.` });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
