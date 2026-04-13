@@ -357,12 +357,15 @@ export const getRetailerCustomers = async (req, res) => {
             date.setDate(date.getDate() - i);
             const dateStr = date.toLocaleDateString('en-IN', { weekday: 'short' });
             
-            // Count customers who made their first order on this day
-            const dailyCount = Array.from(customerMap.values()).filter(c => 
-                new Date(c.user.createdAt).toDateString() === date.toDateString()
-            ).length;
+            // Count unique customers who placed an order on this day
+            const uniquePurchasers = new Set();
+            orders.forEach(order => {
+                if (new Date(order.createdAt).toDateString() === date.toDateString()) {
+                    uniquePurchasers.add(order.user._id.toString());
+                }
+            });
 
-            chartData.push({ name: dateStr, customers: dailyCount });
+            chartData.push({ name: dateStr, customers: uniquePurchasers.size });
         }
 
         const totalCustomers = customerMap.size;
@@ -389,7 +392,7 @@ export const getRetailerCustomers = async (req, res) => {
 
 export const createManualOrder = async (req, res) => {
     try {
-        const { customerId, items, paymentStatus = "Pending", totalAmount: providedTotal, paymentMethod = "Cash", deliveryAddress } = req.body;
+        const { customerId, items, paymentStatus = "Pending", totalAmount: providedTotal, paymentMethod = "Cash", deliveryAddress, deliverySlot } = req.body;
         const retailerId = req.user._id;
         
         if (!items || !Array.isArray(items) || items.length === 0) {
@@ -428,6 +431,7 @@ export const createManualOrder = async (req, res) => {
             paymentStatus,
             status: "Accepted",
             isManual: true,
+            deliverySlot: deliverySlot || "Standard",
             deliveryAddress: typeof deliveryAddress === 'string' ? { address: deliveryAddress } : deliveryAddress,
             statusHistory: [{ 
                 status: "Accepted", 
