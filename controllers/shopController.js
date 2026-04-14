@@ -561,7 +561,7 @@ export const getRetailerOrders = async (req, res) => {
             const status = order.status;
 
             return {
-                id: order.orderId || `#${order._id.toString().slice(-6).toUpperCase()}`,
+                id: `#${order._id.toString().slice(-8).toUpperCase()}`,
                 product: productNames.join(", "),
                 date: new Date(order.createdAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hour12: true }).replace(/\//g, "-"),
                 price: retailerOrderTotal.toFixed(2),

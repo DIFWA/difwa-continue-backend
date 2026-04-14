@@ -151,13 +151,15 @@ export const generateDailyOrders = async (targetDate = new Date()) => {
                 }
             }
 
-            const orderId = `SUB-${Date.now()}-${sub._id.toString().slice(-4)}`;
+            const newOrderObjectId = new mongoose.Types.ObjectId();
+            const displayId = `#${newOrderObjectId.toString().slice(-8).toUpperCase()}`;
 
             const commissionRate = await getCurrentCommissionRate();
             const commissionAmount = parseFloat(((amount * commissionRate) / 100).toFixed(2));
 
             const newOrder = await Order.create({
-                orderId,
+                _id: newOrderObjectId,
+                orderId: displayId,
                 user: sub.user,
                 items: [{
                     product: sub.product._id,
