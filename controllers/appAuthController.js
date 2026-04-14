@@ -144,6 +144,10 @@ export const verifyOtp = async (req, res) => {
             user.businessDetails.otpExpiry = null;
         }
 
+        if (req.body.fcmToken) {
+            user.fcmToken = req.body.fcmToken;
+        }
+
         await user.save();
 
         const token = jwt.sign({ id: user._id, role }, process.env.JWT_SECRET, { expiresIn: "7d" })

@@ -33,14 +33,17 @@ export const createNotification = async (recipientId, { title, message, type, re
             if (user?.fcmToken) {
                 // Pass extra data for navigation in Flutter App
                 const payloadData = {
-                    type: type || "NOTIFICATION",
-                    id: referenceId?.toString() || "",
-                    onModel: onModel || "AppUser"
+                    type: String(type || "NOTIFICATION"),
+                    id: String(referenceId || ""),
+                    onModel: String(onModel || "AppUser")
                 };
+                console.log(`[Push] Delivering to ${recipientId} | Token: ${user.fcmToken.substring(0, 10)}...`);
                 await sendPushNotification(user.fcmToken, title, message, payloadData);
+            } else {
+                console.log(`[Push] User ${recipientId} has no FCM token.`);
             }
         } catch (pushErr) {
-            console.error("Push delivery failed:", pushErr.message);
+            console.error("[Push] Delivery process error:", pushErr.message);
         }
 
         return notification;
