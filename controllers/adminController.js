@@ -610,6 +610,31 @@ export const changeAdminPassword = async (req, res) => {
     }
 };
 
+export const updateAdminProfile = async (req, res) => {
+    try {
+        const { email } = req.body;
+        const user = await User.findById(req.user.id);
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        if (email && email !== user.email) {
+            const emailExists = await User.findOne({ email });
+            if (emailExists) {
+                return res.status(400).json({ success: false, message: "Email already in use" });
+            }
+            user.email = email;
+        }
+
+        await user.save();
+        res.status(200).json({ success: true, message: "Profile updated successfully", data: user });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+
 // --- ADMIN USER MANAGEMENT ---
 export const getAdminUsers = async (req, res) => {
     try {
