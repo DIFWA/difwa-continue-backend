@@ -197,16 +197,20 @@ export const generateDailyOrders = async (targetDate = new Date()) => {
 
             // 8. Socket Notification
             if (newOrder && newOrder.items && newOrder.items.length > 0) {
+                const fullOrder = await Order.findById(newOrder._id)
+                    .populate("user", "fullName name phoneNumber phone")
+                    .populate("items.product");
+
                 const emitData = {
-                    ...newOrder.toObject(),
+                    ...fullOrder.toObject(),
                     product: `${sub.quantity}x ${sub.product.name}`,
                     subscriptionDetails: {
                         frequency: sub.frequency,
                         customDays: sub.customDays
                     },
-                    createdAt: newOrder.createdAt
+                    createdAt: fullOrder.createdAt
                 };
-                await emitOrderUpdate(newOrder.orderId, "Accepted", emitData, newOrder.items[0].retailer, sub.user);
+                await emitOrderUpdate(fullOrder.orderId, "Accepted", emitData, fullOrder.items[0].retailer, sub.user);
             }
 
             stats.created++;

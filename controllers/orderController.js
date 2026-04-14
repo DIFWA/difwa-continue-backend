@@ -156,7 +156,8 @@ export const placeOrder = async (req, res) => {
         // 8. Background Sockets & Notifications
         const populatedOrder = await Order.findById(createdOrder._id)
             .populate("items.product")
-            .populate("items.retailer", "businessDetails fullName phoneNumber");
+            .populate("items.retailer", "businessDetails fullName phoneNumber")
+            .populate("user", "fullName name phoneNumber phone");
 
         await emitOrderUpdate(createdOrder.orderId, "Pending", populatedOrder, identifiedRetailer, userId);
         createNotification(identifiedRetailer.toString(), {
