@@ -41,6 +41,10 @@ router.post("/register", registerUser);
 //login
 router.post("/login", loginUser);
 
+// Google Auth
+router.post("/google-auth", googleAuth);
+router.post("/auth/google", googleAuth); // Alias
+
 
 // OTP flow
 router.post("/auth/send-otp", sendOtp);

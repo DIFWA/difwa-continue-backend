@@ -339,7 +339,7 @@ export const updateProfile = async (req, res) => {
     try {
         const { fullName, email, phoneNumber } = req.body;
 
-        if (!fullName && !email && !phoneNumber) {
+        if (!fullName && !email && !phoneNumber && !req.body.fcmToken) {
             return res.status(400).json({ success: false, message: "At least one field is required to update" });
         }
 
@@ -588,7 +588,7 @@ export const deleteAddress = async (req, res) => {
 // Google Auth (Firebase)
 export const googleAuth = async (req, res) => {
     try {
-        const { idToken, phoneNumber } = req.body;
+        const { idToken, phoneNumber, fcmToken } = req.body;
 
         if (!idToken) {
             return res.status(400).json({ success: false, message: "ID Token is required" });
@@ -639,7 +639,8 @@ export const googleAuth = async (req, res) => {
                 phoneNumber,
                 firebaseUid: uid,
                 isGoogleUser: true,
-                isVerified: true // Google email is verified
+                isVerified: true, // Google email is verified
+                fcmToken
             });
 
             // Send welcome email
@@ -657,6 +658,10 @@ export const googleAuth = async (req, res) => {
             }
             if (!user.isGoogleUser) {
                 user.isGoogleUser = true;
+                updated = true;
+            }
+            if (fcmToken) {
+                user.fcmToken = fcmToken;
                 updated = true;
             }
             if (updated) await user.save();
