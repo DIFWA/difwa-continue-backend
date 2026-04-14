@@ -80,32 +80,60 @@ export const sendBulkNotification = async (req, res) => {
             pushTokens = [...pushTokens, ...retailerTokens];
         }
 
-        // 4. Create Database Notifications for ALL targets (Retailers, Customers, Riders)
-        let allRecipientIds = [...retailerIds];
+        // 4. Build Database Notification objects with correct model mapping
+        const dbNotifications = [];
 
+        // Add Customers
         if (targetType === "all" || targetType === "customer") {
             const allCustomers = await AppUser.find({}).select("_id");
-            allRecipientIds = [...allRecipientIds, ...allCustomers.map(u => u._id)];
+            allCustomers.forEach(c => {
+                dbNotifications.push({
+                    recipient: c._id,
+                    onModel: "AppUser",
+                    title,
+                    message: body,
+                    type: "System"
+                });
+            });
         }
 
+        // Add Riders
         if (targetType === "all" || targetType === "rider") {
             const allRiders = await User.find({ role: "rider" }).select("_id");
-            allRecipientIds = [...allRecipientIds, ...allRiders.map(u => u._id)];
+            allRiders.forEach(r => {
+                dbNotifications.push({
+                    recipient: r._id,
+                    onModel: "User",
+                    title,
+                    message: body,
+                    type: "System"
+                });
+            });
         }
 
-        if (allRecipientIds.length > 0) {
-            const dbNotifications = allRecipientIds.map(id => ({
-                recipient: id,
-                title,
-                message: body,
-                type: "System"
-            }));
+        // Add Retailers (avoiding duplicates if they were in rider/other lists)
+        if (targetType === "all" || targetType === "retailer") {
+            const retailersNotified = new Set(dbNotifications.filter(n => n.onModel === "User").map(n => n.recipient.toString()));
+            const allRetailers = await User.find({ role: "retailer" }).select("_id");
+            allRetailers.forEach(ret => {
+                if (!retailersNotified.has(ret._id.toString())) {
+                    dbNotifications.push({
+                        recipient: ret._id,
+                        onModel: "User",
+                        title,
+                        message: body,
+                        type: "System"
+                    });
+                }
+            });
+        }
 
+        if (dbNotifications.length > 0) {
             // Bulk insert into database
             const createdNotifications = await Notification.insertMany(dbNotifications);
 
-            // Emit via socket for real-time web panel update (Retailers only have socket connection based on IDs typically)
-            // But we can just loop over created non-customer notifications or emit to all, socketService handles invalid IDs gracefully
+            // Emit via socket for real-time ping (using batching if necessary, but here we emit to individual user rooms)
+            // Note: If dbNotifications.length > 1000, consider io.emit() with local filtering or background queue
             createdNotifications.forEach(notif => {
                 emitNotification(notif.recipient.toString(), notif.toObject());
             });
