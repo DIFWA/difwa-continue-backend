@@ -637,10 +637,10 @@ export const updateAdminProfile = async (req, res) => {
 export const forgotPassword = async (req, res) => {
     try {
         const { email } = req.body;
-        const user = await User.findOne({ email, role: "admin" });
+        const user = await User.findOne({ email });
 
         if (!user) {
-            return res.status(404).json({ success: false, message: "Administrator with this email not found" });
+            return res.status(404).json({ success: false, message: "User with this email not found" });
         }
 
         // Generate 6 digit OTP
@@ -666,8 +666,7 @@ export const resetPassword = async (req, res) => {
         const user = await User.findOne({ 
             email, 
             otp, 
-            otpExpiry: { $gt: Date.now() },
-            role: "admin"
+            otpExpiry: { $gt: Date.now() }
         });
 
         if (!user) {
