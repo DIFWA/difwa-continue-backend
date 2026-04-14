@@ -108,6 +108,7 @@ export const getFilteredProducts = async (req, res) => {
             minPrice, 
             maxPrice, 
             search, 
+            deliverySlot,
             page = 1, 
             limit = 20 
         } = req.query;
@@ -130,7 +131,23 @@ export const getFilteredProducts = async (req, res) => {
             if (maxPrice) filterObj.price.$lte = Number(maxPrice);
         }
 
-        // 3. Search Query
+        // 3. Delivery Slot Filter
+        if (deliverySlot) {
+            // Find all retailer IDs that support this delivery slot
+            // 'deliverySlot' can be a single string or comma-separated for multiple
+            const slotsToMatch = deliverySlot.includes(',') ? deliverySlot.split(',') : [deliverySlot];
+            
+            const retailersWithSlot = await User.find({
+                role: "retailer",
+                status: "approved",
+                "businessDetails.deliverySlots": { $in: slotsToMatch }
+            }).distinct("_id");
+
+            // Filter products to only show those from these retailers
+            filterObj.retailer = { $in: retailersWithSlot };
+        }
+
+        // 4. Search Query
         if (search) {
             filterObj.$or = [
                 { name: new RegExp(search, "i") },
