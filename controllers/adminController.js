@@ -614,7 +614,7 @@ export const changeAdminPassword = async (req, res) => {
 export const getAdminUsers = async (req, res) => {
     try {
         const admins = await User.find({ role: "admin" })
-            .populate("roleId", "name permissions")
+            .populate("roleId", "name permissions isSystem")
             .populate("updatedBy", "name")
             .select("-password")
             .sort({ createdAt: -1 });
