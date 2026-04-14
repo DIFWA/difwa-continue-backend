@@ -287,15 +287,20 @@ export const loginUser = async (req, res) => {
 
         const token = jwt.sign({ id: user._id, role }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
-        user = await AppUser.findByIdAndUpdate(
-            user._id,
-            {
-                $set: {
-                    fcmToken: fcmToken
-                }
-            },
-            { new: true }
-        )
+        if (role === "customer") {
+            user = await AppUser.findByIdAndUpdate(
+                user._id,
+                { $set: { fcmToken: fcmToken } },
+                { new: true }
+            );
+        } else {
+            const User = (await import("../models/User.js")).default;
+            user = await User.findByIdAndUpdate(
+                user._id,
+                { $set: { fcmToken: fcmToken } },
+                { new: true }
+            );
+        }
 
         return res.status(200).json({
             success: true,
@@ -338,7 +343,14 @@ export const updateProfile = async (req, res) => {
             return res.status(400).json({ success: false, message: "At least one field is required to update" });
         }
 
-        const user = await AppUser.findById(req.user._id);
+        let user;
+        if (req.user.role === "rider") {
+            const Rider = (await import("../models/User.js")).default;
+            user = await Rider.findById(req.user._id);
+        } else {
+            user = await AppUser.findById(req.user._id);
+        }
+
         if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
         const updates = [];
