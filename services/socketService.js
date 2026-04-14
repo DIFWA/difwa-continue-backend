@@ -226,12 +226,8 @@ export const emitChatUpdate = async (chatId, message) => {
 };
 
 export const emitNotification = async (recipientId, notification) => {
-    // Determine possible rooms the client might be in
-    const rooms = [
-        `user_${recipientId}`,
-        `retailer_${recipientId}`,
-        `retailer_notifications_${recipientId}`
-    ];
+    // Standardize on user_ID room for all notification types (System, Order, Chat)
+    const rooms = [`user_${recipientId}`];
     
     const payload = { ...notification, createdAt: new Date() };
 

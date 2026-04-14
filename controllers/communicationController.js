@@ -181,7 +181,7 @@ export const sendBulkNotification = async (req, res) => {
             message: `Dispatch successful.`,
             details: {
                 pushNotificationsSent: uniquePushTokens.length,
-                panelNotificationsSent: allRecipientIds.length
+                panelNotificationsSent: dbNotifications.length
             }
         });
 
