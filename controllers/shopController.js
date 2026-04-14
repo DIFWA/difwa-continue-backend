@@ -13,7 +13,15 @@ import { checkAndNotifyLowStock } from "../services/stockService.js";
 export const getPublicShops = async (req, res) => {
     try {
         const { search = "" } = req.query;
-        const query = { role: "retailer", status: "approved" };
+
+        // 1. Get unique IDs of retailers who have at least one "Published" product
+        const retailersWithProducts = await Product.distinct("retailer", { status: "Published" });
+
+        const query = { 
+            _id: { $in: retailersWithProducts },
+            role: "retailer", 
+            status: "approved" 
+        };
 
         if (search) {
             query.$or = [

@@ -22,9 +22,13 @@ export const globalSearch = async (req, res) => {
 
         const searchRegex = new RegExp(query, "i");
 
+        // 0. Get unique IDs of retailers who have at least one "Published" product
+        const retailersWithProducts = await Product.distinct("retailer", { status: "Published" });
+
         // 1. Search for Retailers (Shops)
-        // Only approved retailers who have shops
+        // Only approved retailers who have shops AND have products
         const shops = await User.find({
+            _id: { $in: retailersWithProducts },
             role: "retailer",
             status: "approved",
             $or: [
