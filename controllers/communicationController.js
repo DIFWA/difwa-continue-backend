@@ -119,10 +119,33 @@ export const sendBulkNotification = async (req, res) => {
             return res.status(404).json({ success: false, message: "No users found in this segment (Retailers, Riders, or Customers)." });
         }
 
-        // 7. Dispatch FCM only to those in the push list (Customers/Riders)
+        // 7. Dispatch FCM in batches for high speed
         if (uniquePushTokens.length > 0) {
-            const pushPromises = uniquePushTokens.map(token => sendPushNotification(token, title, body));
-            await Promise.all(pushPromises);
+            const admin = (await import("../config/firebase.js")).default;
+            
+            // Firebase limits multicast to 500 tokens per call
+            const chunks = [];
+            for (let i = 0; i < uniquePushTokens.length; i += 500) {
+                chunks.push(uniquePushTokens.slice(i, i + 500));
+            }
+
+            const pushResults = await Promise.all(chunks.map(tokens => 
+                admin.messaging().sendEachForMulticast({
+                    notification: { title, body },
+                    tokens,
+                    android: {
+                        priority: "high",
+                        notification: { channelId: "difwa_high_importance", sound: "default" },
+                    },
+                    apns: {
+                        payload: { aps: { contentAvailable: true, sound: "default" } },
+                    },
+                })
+            ));
+            
+            const totalSuccess = pushResults.reduce((acc, res) => acc + res.successCount, 0);
+            const totalFailure = pushResults.reduce((acc, res) => acc + res.failureCount, 0);
+            console.log(`📡 Bulk Push Completed | Success: ${totalSuccess} | Failure: ${totalFailure}`);
         }
 
         res.json({
@@ -130,7 +153,7 @@ export const sendBulkNotification = async (req, res) => {
             message: `Dispatch successful.`,
             details: {
                 pushNotificationsSent: uniquePushTokens.length,
-                panelNotificationsSent: retailerIds.length
+                panelNotificationsSent: allRecipientIds.length
             }
         });
 
