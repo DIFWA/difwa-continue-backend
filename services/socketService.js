@@ -157,39 +157,44 @@ export const emitOrderUpdate = async (orderId, status, data, retailerId = null, 
 
 // Emit rider assignment to the user — triggers popup + sound in user app
 export const emitRiderAssigned = async (orderId, userId, riderInfo) => {
-    const room = `user_${userId}`;
+    const rooms = [`user_${userId.toString()}`, `rider_assigned_${orderId}`];
     const payload = { orderId, rider: riderInfo };
 
-    _log("Emitting riderAssigned", { data: { room, orderId } });
+    _log("Emitting riderAssigned", { data: { rooms, orderId } });
 
     if (io) {
-        io.to(room).emit("riderAssigned", payload);
+        rooms.forEach(room => io.to(room).emit("riderAssigned", payload));
     }
-    // ... relay logic same as before but for simplicity I will just add the new function below
 };
 
 export const emitOrderDelivered = async (orderId, userId) => {
-    const room = `user_${userId}`;
+    // Broadcast to multiple potential rooms for reliability
+    const rooms = [
+        `user_${userId.toString()}`,
+        `order_delivered_${orderId}`
+    ];
     const payload = { orderId };
 
-    _log("Emitting orderDelivered for Rating Popup", { data: { room, orderId } });
+    _log("Emitting orderDelivered for Rating Popup", { data: { rooms, orderId } });
 
     if (io) {
-        io.to(room).emit("orderDelivered", payload);
+        rooms.forEach(room => io.to(room).emit("orderDelivered", payload));
     }
 
     const relayUrl = process.env.SOCKET_RELAY_URL;
     if (relayUrl) {
-        fetch(`${relayUrl}/emit`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                secret: process.env.SOCKET_SECRET || "shrimpbite_socket_relay_secret_2026",
-                event: "orderDelivered",
-                room: room,
-                data: payload
+        Promise.all(rooms.map(room => 
+            fetch(`${relayUrl}/emit`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    secret: process.env.SOCKET_SECRET || "shrimpbite_socket_relay_secret_2026",
+                    event: "orderDelivered",
+                    room: room,
+                    data: payload
+                })
             })
-        }).catch(err => console.error("Relay orderDelivered emit failed:", err.message));
+        )).catch(err => console.error("Relay orderDelivered emit failed:", err.message));
     }
 };
 
@@ -221,20 +226,27 @@ export const emitChatUpdate = async (chatId, message) => {
 };
 
 export const emitNotification = async (recipientId, notification) => {
-    // 1. Send to the recipient's specific notification room
-    const room = `retailer_notifications_${recipientId}`;
+    // Determine possible rooms the client might be in
+    const rooms = [
+        `user_${recipientId}`,
+        `retailer_${recipientId}`,
+        `retailer_notifications_${recipientId}`
+    ];
+    
     const payload = { ...notification, createdAt: new Date() };
 
-    _log("Emitting Notification", { data: { room, title: notification.title } });
+    _log("Emitting Notification to multiple rooms", { data: { rooms, title: notification.title } });
 
     if (io) {
-        io.to(room).emit("notification", payload);
+        rooms.forEach(room => {
+            io.to(room).emit("notification", payload);
+        });
     }
 
     const relayUrl = process.env.SOCKET_RELAY_URL;
     if (relayUrl) {
-        try {
-            await fetch(`${relayUrl}/emit`, {
+        Promise.all(rooms.map(room => 
+            fetch(`${relayUrl}/emit`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -243,10 +255,8 @@ export const emitNotification = async (recipientId, notification) => {
                     room: room,
                     data: payload
                 })
-            });
-        } catch (error) {
-            console.error("Relay notification emit failed:", error.message);
-        }
+            })
+        )).catch(err => console.error("Relay notification emit failed:", err.message));
     }
 };
 
