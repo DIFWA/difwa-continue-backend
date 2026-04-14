@@ -1,5 +1,6 @@
 import { Chat, Message } from "../models/Chat.js";
 import { emitChatUpdate } from "../services/socketService.js";
+import { createNotification } from "../services/notificationService.js";
 
 export const createChat = async (req, res) => {
     try {
@@ -35,7 +36,20 @@ export const sendMessage = async (req, res) => {
 
         const chat = await Chat.findByIdAndUpdate(chatId, { lastMessage: message._id }, { new: true });
 
-        // Emit via Socket
+        // Identify Recipient for Push Notification
+        const recipient = chat.participants.find(p => p.id.toString() !== req.user.id.toString());
+        
+        if (recipient) {
+            createNotification(recipient.id.toString(), {
+                title: `New Message from ${req.user.name || "Support"}`,
+                message: content.length > 50 ? content.substring(0, 50) + "..." : content,
+                type: "Chat",
+                referenceId: chatId,
+                onModel: (recipient.role === "user" || recipient.role === "customer") ? "AppUser" : "User"
+            });
+        }
+
+        // Emit via Socket for real-time update in active chat
         emitChatUpdate(chatId, message);
 
         res.status(201).json({ success: true, data: message });
