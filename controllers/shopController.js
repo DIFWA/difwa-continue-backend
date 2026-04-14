@@ -559,25 +559,29 @@ export const getRetailerOrders = async (req, res) => {
             });
 
             const status = order.status;
+            const orderDate = order.createdAt ? new Date(order.createdAt) : new Date();
+            const formattedDate = isNaN(orderDate.getTime()) 
+                ? "Date Pending" 
+                : orderDate.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hour12: true }).replace(/\//g, "-");
 
             return {
                 id: `#${order._id.toString().slice(-8).toUpperCase()}`,
-                product: productNames.join(", "),
-                date: new Date(order.createdAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hour12: true }).replace(/\//g, "-"),
-                price: retailerOrderTotal.toFixed(2),
-                payment: order.paymentStatus,
-                status: status,
+                product: productNames.join(", ") || "Order Items",
+                date: formattedDate,
+                price: retailerOrderTotal > 0 ? retailerOrderTotal.toFixed(2) : (order.totalAmount ? order.totalAmount.toFixed(2) : "0.00"),
+                payment: order.paymentStatus || "Pending",
+                status: status || "Pending",
                 orderType: order.orderType || (order.orderId?.startsWith("SUB-") ? "Subscription" : "One-time"),
                 rider: order.rider ? {
                     id: order.rider._id,
                     name: order.rider.name || "Delivery Partner"
                 } : null,
                 statusHistory: order.statusHistory || [],
-                items: retailerItems, // Filtered items for this retailer
+                items: retailerItems,
                 user: order.user,
                 deliveryAddress: order.deliveryAddress,
                 deliverySlot: order.deliverySlot || null,
-                createdAt: order.createdAt
+                createdAt: order.createdAt || new Date()
             };
         });
 
