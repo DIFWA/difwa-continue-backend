@@ -22,6 +22,10 @@ const roleSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
         default: null
+    },
+    isSystem: {
+        type: Boolean,
+        default: false
     }
 }, { timestamps: true });
 

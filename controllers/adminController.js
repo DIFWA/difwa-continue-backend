@@ -495,6 +495,13 @@ export const updateRole = async (req, res) => {
     try {
         const { id } = req.params;
         const { name, description, permissions, securityLevel } = req.body;
+        
+        const existingRole = await Role.findById(id);
+        if (!existingRole) return res.status(404).json({ success: false, message: "Role not found" });
+        if (existingRole.isSystem) {
+            return res.status(403).json({ success: false, message: "System roles are locked and cannot be modified." });
+        }
+
         const role = await Role.findByIdAndUpdate(id, {
             name,
             description,
@@ -502,7 +509,7 @@ export const updateRole = async (req, res) => {
             securityLevel,
             updatedBy: req.user.id
         }, { new: true });
-        if (!role) return res.status(404).json({ success: false, message: "Role not found" });
+        
         res.status(200).json({ success: true, data: role });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -512,8 +519,13 @@ export const updateRole = async (req, res) => {
 export const deleteRole = async (req, res) => {
     try {
         const { id } = req.params;
-        const role = await Role.findByIdAndDelete(id);
+        const role = await Role.findById(id);
         if (!role) return res.status(404).json({ success: false, message: "Role not found" });
+        if (role.isSystem) {
+            return res.status(403).json({ success: false, message: "System roles are locked and cannot be deleted." });
+        }
+        
+        await Role.findByIdAndDelete(id);
         res.status(200).json({ success: true, message: "Role deleted successfully" });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -618,10 +630,21 @@ export const updateAdminUser = async (req, res) => {
         const { id } = req.params;
         const { roleId, permissions } = req.body;
 
-        const admin = await User.findById(id);
+        const admin = await User.findById(id).populate("roleId");
         if (!admin || admin.role !== "admin") {
             return res.status(404).json({ success: false, message: "Admin user not found" });
         }
+
+        // --- System User Protection ---
+        if (admin.roleId && admin.roleId.isSystem) {
+             if (roleId && roleId !== admin.roleId._id.toString()) {
+                 return res.status(403).json({ success: false, message: "Cannot change the role of a System-level Administrator." });
+             }
+             if (permissions !== undefined && req.user.id !== id) {
+                 return res.status(403).json({ success: false, message: "Only the System Administrator can modify their own permissions." });
+             }
+        }
+        // ------------------------------
 
         if (roleId) {
             const role = await Role.findById(roleId);
@@ -652,10 +675,14 @@ export const deleteAdminUser = async (req, res) => {
             return res.status(400).json({ success: false, message: "You cannot delete yourself" });
         }
         
-        const admin = await User.findById(id);
+        const admin = await User.findById(id).populate("roleId");
 
         if (!admin || admin.role !== "admin") {
             return res.status(404).json({ success: false, message: "Admin user not found" });
+        }
+
+        if (admin.roleId && admin.roleId.isSystem) {
+            return res.status(403).json({ success: false, message: "System-level Administrators cannot be deleted." });
         }
 
         await User.findByIdAndDelete(id);
