@@ -97,7 +97,11 @@ const userSchema = new mongoose.Schema({
     fcmToken: {
         type: String,
         default: null
-    }
+    },
+    resetPasswordToken: { type: String, default: null },
+    resetPasswordExpires: { type: Date, default: null },
+    otp: { type: String, default: null },
+    otpExpiry: { type: Date, default: null },
 }, { timestamps: true })
 
 export default mongoose.model("User", userSchema, "users")

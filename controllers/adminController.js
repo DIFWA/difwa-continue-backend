@@ -10,7 +10,7 @@ import Favorite from "../models/Favorite.js";
 import Subscription from "../models/Subscription.js";
 import Transaction from "../models/Transaction.js";
 import bcrypt from "bcryptjs";
-import { sendInviteEmail } from "../services/emailService.js";
+import { sendInviteEmail, sendOtpEmail } from "../services/emailService.js";
 // --- CATEGORY CONTROLLERS ---
 export const getCategories = async (req, res) => {
     try {
@@ -629,6 +629,59 @@ export const updateAdminProfile = async (req, res) => {
 
         await user.save();
         res.status(200).json({ success: true, message: "Profile updated successfully", data: user });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const forgotPassword = async (req, res) => {
+    try {
+        const { email } = req.body;
+        const user = await User.findOne({ email, role: "admin" });
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: "Administrator with this email not found" });
+        }
+
+        // Generate 6 digit OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        user.otp = otp;
+        user.otpExpiry = Date.now() + 10 * 60 * 1000; // 10 minutes
+        await user.save();
+
+        const emailSent = await sendOtpEmail(email, otp);
+        if (!emailSent) {
+            return res.status(500).json({ success: false, message: "Error sending OTP email" });
+        }
+
+        res.status(200).json({ success: true, message: "OTP sent to your email" });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const resetPassword = async (req, res) => {
+    try {
+        const { email, otp, newPassword } = req.body;
+        const user = await User.findOne({ 
+            email, 
+            otp, 
+            otpExpiry: { $gt: Date.now() },
+            role: "admin"
+        });
+
+        if (!user) {
+            return res.status(400).json({ success: false, message: "Invalid or expired OTP" });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(newPassword, salt);
+        user.otp = null;
+        user.otpExpiry = null;
+        user.isFirstLogin = false;
+        await user.save();
+
+        res.status(200).json({ success: true, message: "Password reset successfully" });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

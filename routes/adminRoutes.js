@@ -16,6 +16,8 @@ import {
     inviteAdminUser,
     changeAdminPassword,
     updateAdminProfile,
+    forgotPassword,
+    resetPassword,
     deleteRetailer,
     getAdminUsers,
     updateAdminUser,
@@ -73,6 +75,8 @@ router.post("/invite", protect, adminOnly, inviteAdminUser)
 // Change Password & Profile
 router.put("/change-password", protect, changeAdminPassword)
 router.put("/profile", protect, updateAdminProfile)
+router.post("/forgot-password", forgotPassword)
+router.post("/reset-password", resetPassword)
 
 // Delete Retailer
 router.delete("/retailers/:id", protect, adminOnly, deleteRetailer)
