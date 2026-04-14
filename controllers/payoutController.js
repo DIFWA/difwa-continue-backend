@@ -94,18 +94,27 @@ export const approvePayout = async (req, res) => {
 };
 export const getAllPayouts = async (req, res) => {
     try {
-        const { search = "", page = 1, limit = 10 } = req.query;
+        const { search = "", page = 1, limit = 10, date = "" } = req.query;
         const pageNum = parseInt(page);
         const limitNum = parseInt(limit);
         const skip = (pageNum - 1) * limitNum;
+
+        // Build date range filter if date provided (e.g. "2026-04-14")
+        let dateQuery = {};
+        if (date) {
+            const start = new Date(date);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(date);
+            end.setHours(23, 59, 59, 999);
+            dateQuery = { createdAt: { $gte: start, $lte: end } };
+        }
 
         let payouts = [];
         let total = 0;
 
         if (search) {
-            // Find by transaction ID or shop name
-            // For search, we fetch and then filter/paginate manually because of population match
-            const allPayouts = await Payout.find({})
+            // For search, fetch all + filter manually (to allow population-based search)
+            const allPayouts = await Payout.find({ ...dateQuery })
                 .populate({
                     path: 'retailer',
                     select: 'name email businessDetails'
@@ -122,8 +131,8 @@ export const getAllPayouts = async (req, res) => {
             total = filteredPayouts.length;
             payouts = filteredPayouts.slice(skip, skip + limitNum);
         } else {
-            total = await Payout.countDocuments({});
-            payouts = await Payout.find({})
+            total = await Payout.countDocuments({ ...dateQuery });
+            payouts = await Payout.find({ ...dateQuery })
                 .populate('retailer', 'name email businessDetails')
                 .sort({ createdAt: -1 })
                 .skip(skip)
