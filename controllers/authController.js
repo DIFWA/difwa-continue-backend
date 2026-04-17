@@ -152,6 +152,7 @@ export const updateRetailerProfile = async (req, res) => {
                     ...(businessDetails.location || {})
                 }
             };
+            user.markModified("businessDetails");
         }
 
         if (whatsappNumber !== undefined) user.whatsappNumber = whatsappNumber;
