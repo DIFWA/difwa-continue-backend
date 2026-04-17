@@ -340,3 +340,38 @@ export const emitProductUpdate = (action, product, retailerId) => {
         }).catch(err => console.error("Relay productUpdate emit failed:", err.message));
     }
 };
+// ─── New Support Request Emitter ─────────────────────────────────────────────
+export const emitNewSupportRequest = (supportRequest, appUser) => {
+    const payload = {
+        ticketId: supportRequest._id?.toString(),
+        subject: supportRequest.subject,
+        type: supportRequest.type,
+        message: supportRequest.message,
+        createdAt: supportRequest.createdAt,
+        user: {
+            name: appUser?.fullName || "Unknown",
+            phone: appUser?.phoneNumber || "N/A",
+            email: appUser?.email || "N/A",
+        }
+    };
+
+    _log("Emitting NEW_SUPPORT_REQUEST to admin room", { data: { ticketId: payload.ticketId } });
+
+    if (io) {
+        io.to("admin").emit("NEW_SUPPORT_REQUEST", payload);
+    }
+
+    const relayUrl = process.env.SOCKET_RELAY_URL;
+    if (relayUrl) {
+        fetch(`${relayUrl}/emit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                secret: process.env.SOCKET_SECRET || "shrimpbite_socket_relay_secret_2026",
+                event: "NEW_SUPPORT_REQUEST",
+                room: "admin",
+                data: payload
+            })
+        }).catch(err => console.error("Relay new support request emit failed:", err.message));
+    }
+};

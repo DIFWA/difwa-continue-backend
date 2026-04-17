@@ -2,6 +2,7 @@ import Support from "../models/Support.js";
 import AppSetting from "../models/AppSetting.js";
 import AppUser from "../models/AppUser.js";
 import { sendSupportNotificationEmail } from "../services/emailService.js";
+import { emitNewSupportRequest } from "../services/socketService.js";
 
 export const contactAdmin = async (req, res) => {
     try {
@@ -23,6 +24,10 @@ export const contactAdmin = async (req, res) => {
                 : ["pritamcodeservir@gmail.com"];
                 
             await sendSupportNotificationEmail(adminEmails, subject, message, appUser, support._id.toString());
+            
+            // Fire Socket Event
+            emitNewSupportRequest(support, appUser);
+            
         } catch (emailError) {
             console.error("Failed to send support notification email:", emailError);
             // Non-blocking error, so we continue
