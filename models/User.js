@@ -59,6 +59,10 @@ const userSchema = new mongoose.Schema({
             state: String,
             pincode: String,
             landmark: String,
+            coordinates: {
+                lat: Number,
+                lng: Number
+            }
         },
         legal: {
             gst: String,

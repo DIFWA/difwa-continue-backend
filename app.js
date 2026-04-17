@@ -25,6 +25,7 @@ import commissionRoutes from "./routes/commissionRoutes.js";
 import appSupportRoutes from "./routes/appSupportRoutes.js";
 import appNotificationRoutes from "./routes/appNotificationRoutes.js";
 import faqRoutes from "./routes/faqRoutes.js";
+import deliveryChargeRoutes from "./routes/deliveryChargeRoutes.js";
 import Faq from "./models/Faq.js";
 const app = express()
 
@@ -109,6 +110,7 @@ app.use("/api/app/notifications", appNotificationRoutes);
 app.use("/api/faq", faqRoutes);
 
 app.use("/api/commission", commissionRoutes);
+app.use("/api/delivery-charge", deliveryChargeRoutes);
 
 // Seed Check
 const seedIfEmpty = async () => {

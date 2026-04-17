@@ -9,6 +9,12 @@ import { emitOrderUpdate } from "../services/socketService.js";
 import { createNotification, notifyAdmins } from "../services/notificationService.js";
 import { getCurrentCommissionRate } from "./commissionController.js";
 import { checkAndNotifyLowStock } from "../services/stockService.js";
+import {
+    getDeliveryChargeSetting,
+    calculateDistanceKm,
+    resolveDeliveryCharge
+} from "../services/deliveryChargeService.js";
+import User from "../models/User.js";
 
 // Helper: Sleep function for delays if needed
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -101,6 +107,36 @@ export const placeOrder = async (req, res) => {
             throw new Error("Retailer not identified for items.");
         }
 
+        // 3a. Calculate delivery fee
+        let deliveryFee = 0;
+        let distanceKm = 0;
+
+        const retailerUser = await User.findById(identifiedRetailer).select("businessDetails.location");
+        const vendorCoords = retailerUser?.businessDetails?.location?.coordinates;
+        const userCoords = deliveryAddress?.coordinates; // { lat, lng } sent from app
+
+        if (vendorCoords?.lat && vendorCoords?.lng && userCoords?.lat && userCoords?.lng) {
+            try {
+                distanceKm = await calculateDistanceKm(
+                    vendorCoords.lat,
+                    vendorCoords.lng,
+                    parseFloat(userCoords.lat),
+                    parseFloat(userCoords.lng)
+                );
+                const deliverySetting = await getDeliveryChargeSetting();
+                const result = resolveDeliveryCharge(distanceKm, deliverySetting);
+                if (!result.deliverable) {
+                    throw new Error(`Delivery not available. Distance ${distanceKm} km exceeds maximum ${deliverySetting.maxDeliveryKm} km.`);
+                }
+                deliveryFee = result.charge;
+            } catch (err) {
+                // If the error is a deliverability error, re-throw it
+                if (err.message.startsWith("Delivery not available")) throw err;
+                // Otherwise, log and continue with ₹0 fee (graceful fallback)
+                console.warn("Delivery fee calculation skipped:", err.message);
+            }
+        }
+
         // 4. Create Order ID (Matches mobile app display format)
         const newOrderId = new mongoose.Types.ObjectId();
         const displayId = `#${newOrderId.toString().slice(-8).toUpperCase()}`;
@@ -108,12 +144,12 @@ export const placeOrder = async (req, res) => {
         // 3. Wallet Balance Check & Deduction
         if (paymentMethod === "Wallet") {
             const user = await AppUser.findById(userId).session(session);
-            if (!user || (user.walletBalance || 0) < totalAmount) {
-                throw new Error(`Insufficient wallet balance. Total: ₹${totalAmount}, Current: ₹${user?.walletBalance || 0}`);
+            const totalToPay = totalAmount + deliveryFee;
+            if (!user || (user.walletBalance || 0) < totalToPay) {
+                throw new Error(`Insufficient wallet balance. Total: ₹${totalToPay} (items ₹${totalAmount} + delivery ₹${deliveryFee}), Current: ₹${user?.walletBalance || 0}`);
             }
 
-            // Pass displayId or newOrderId as reference
-            await walletService.adjustBalance(userId, "appUser", totalAmount, "Debit", "Order Payment", "Order", displayId, session);
+            await walletService.adjustBalance(userId, "appUser", totalToPay, "Debit", "Order Payment", "Order", displayId, session);
         }
 
         // 4. Commission logic
@@ -127,6 +163,8 @@ export const placeOrder = async (req, res) => {
             user: userId,
             items: orderItems,
             totalAmount,
+            deliveryFee,
+            distance: distanceKm,
             deliveryAddress,
             paymentMethod,
             deliverySlot: deliverySlot || null,
@@ -164,7 +202,7 @@ export const placeOrder = async (req, res) => {
         await emitOrderUpdate(createdOrder.orderId, "Pending", populatedOrder, identifiedRetailer, userId);
         createNotification(identifiedRetailer.toString(), {
             title: "New Order Received! 💧",
-            message: `You have a new order (#${createdOrder._id.toString().slice(-6)}) for ₹${totalAmount}.`,
+            message: `You have a new order (#${createdOrder._id.toString().slice(-6)}) for ₹${totalAmount}${deliveryFee > 0 ? ` + ₹${deliveryFee} delivery` : ''}.`,
             type: "Order",
             referenceId: createdOrder._id.toString()
         });
@@ -177,7 +215,7 @@ export const placeOrder = async (req, res) => {
         // ─── ADMIN GLOBAL NOTIFICATION ──────────────────
         notifyAdmins({
             title: "Global Order Alert 🛒",
-            message: `Order #${createdOrder._id.toString().slice(-6)} placed for ₹${totalAmount}.`,
+            message: `Order #${createdOrder._id.toString().slice(-6)} placed for ₹${totalAmount + deliveryFee} (items ₹${totalAmount}, delivery ₹${deliveryFee}).`,
             type: "Order",
             referenceId: createdOrder._id.toString()
         });
@@ -185,7 +223,11 @@ export const placeOrder = async (req, res) => {
         res.status(201).json({
             success: true,
             message: "Order placed successfully",
-            order: createdOrder
+            order: {
+                ...createdOrder.toObject(),
+                deliveryFee,
+                distance: distanceKm
+            }
         });
 
     } catch (error) {
