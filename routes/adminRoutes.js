@@ -25,6 +25,7 @@ import {
     getGlobalTransactions,
     getGlobalSearch
 } from "../controllers/adminController.js";
+import { getAllSupportRequests, updateSupportEmails, getSupportEmails } from "../controllers/adminSupportController.js";
 import {
     getSubscriptionPlans,
     createSubscriptionPlan,
@@ -91,5 +92,10 @@ router.get("/all-transactions", protect, adminOnly, getGlobalTransactions)
 
 // Global Search
 router.get("/search", protect, adminOnly, getGlobalSearch)
+
+// Support Requests
+router.get("/support/requests", protect, adminOnly, getAllSupportRequests);
+router.get("/support/emails", protect, adminOnly, getSupportEmails);
+router.put("/support/emails", protect, adminOnly, updateSupportEmails);
 
 export default router;

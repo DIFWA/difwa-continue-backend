@@ -1,4 +1,7 @@
 import Support from "../models/Support.js";
+import AppSetting from "../models/AppSetting.js";
+import AppUser from "../models/AppUser.js";
+import { sendSupportNotificationEmail } from "../services/emailService.js";
 
 export const contactAdmin = async (req, res) => {
     try {
@@ -9,6 +12,23 @@ export const contactAdmin = async (req, res) => {
             subject,
             message
         });
+        
+        try {
+            // Find user email if possible
+            const appUser = await AppUser.findById(req.userId);
+            const userEmail = appUser?.email || "Unknown";
+            
+            let setting = await AppSetting.findOne();
+            let adminEmails = setting?.supportEmails && setting.supportEmails.length > 0 
+                ? setting.supportEmails 
+                : ["pritamcodeservir@gmail.com"];
+                
+            await sendSupportNotificationEmail(adminEmails, subject, message, userEmail);
+        } catch (emailError) {
+            console.error("Failed to send support notification email:", emailError);
+            // Non-blocking error, so we continue
+        }
+
         res.status(201).json({ success: true, message: "Support request sent successfully", data: support });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

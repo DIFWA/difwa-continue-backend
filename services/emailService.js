@@ -139,3 +139,34 @@ export const sendLowStockEmail = async (email, productName, stockCount) => {
         return false;
     }
 };
+
+export const sendSupportNotificationEmail = async (emails, subject, message, userEmail) => {
+    const mailOptions = {
+        from: `"Difwa Support" <${process.env.EMAIL_USER}>`,
+        bcc: emails,
+        subject: `New Support Request: ${subject}`,
+        html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
+                <h2 style="color: #3b82f6;">New Support Request</h2>
+                <p>A new support request has been submitted by an app user.</p>
+                <div style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                    <p><strong>User Email (if available):</strong> ${userEmail || 'N/A'}</p>
+                    <p><strong>Subject:</strong> ${subject}</p>
+                    <p><strong>Message:</strong></p>
+                    <p style="white-space: pre-wrap;">${message}</p>
+                </div>
+                <p>Please check the admin panel for more details.</p>
+                <hr style="border: 0; border-top: 1px solid #e0e0e0; margin: 20px 0;">
+                <p style="text-align: center; color: #9ca3af; font-size: 0.75rem;">© 2026 Difwa.</p>
+            </div>
+        `,
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        return true;
+    } catch (error) {
+        console.error("Error sending support notification email:", error);
+        return false;
+    }
+};
