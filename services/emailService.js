@@ -140,25 +140,142 @@ export const sendLowStockEmail = async (email, productName, stockCount) => {
     }
 };
 
-export const sendSupportNotificationEmail = async (emails, subject, message, userEmail) => {
+export const sendSupportNotificationEmail = async (emails, subject, message, appUser, ticketId) => {
+    const name = appUser?.fullName || "N/A";
+    const email = appUser?.email || "N/A";
+    const phone = appUser?.phoneNumber || "N/A";
+    const userId = appUser?._id?.toString() || "N/A";
+    const timestamp = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "full", timeStyle: "short" });
+
+    const adminPanelUrl = `https://admin.difwa.com/admin/support-requests`;
+    const userProfileUrl = `https://admin.difwa.com/admin/users`;
+
     const mailOptions = {
-        from: `"Difwa Support" <${process.env.EMAIL_USER}>`,
+        from: `"Difwa Notification System 💧" <${process.env.EMAIL_USER}>`,
         bcc: emails,
-        subject: `New Support Request: ${subject}`,
+        subject: `[Support Alert] New Request: ${subject}`,
         html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
-                <h2 style="color: #3b82f6;">New Support Request</h2>
-                <p>A new support request has been submitted by an app user.</p>
-                <div style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                    <p><strong>User Email (if available):</strong> ${userEmail || 'N/A'}</p>
-                    <p><strong>Subject:</strong> ${subject}</p>
-                    <p><strong>Message:</strong></p>
-                    <p style="white-space: pre-wrap;">${message}</p>
-                </div>
-                <p>Please check the admin panel for more details.</p>
-                <hr style="border: 0; border-top: 1px solid #e0e0e0; margin: 20px 0;">
-                <p style="text-align: center; color: #9ca3af; font-size: 0.75rem;">© 2026 Difwa.</p>
-            </div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Support Request</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f6fb;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6fb;padding:30px 0;">
+    <tr>
+      <td align="center">
+        <table width="620" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#1a73e8,#0d47a1);padding:32px 36px;text-align:center;">
+              <p style="margin:0;color:#90caf9;font-size:13px;letter-spacing:2px;text-transform:uppercase;">Difwa Help Center</p>
+              <h1 style="margin:8px 0 0;color:#ffffff;font-size:26px;font-weight:700;">New Support Request</h1>
+              <p style="margin:8px 0 0;color:#bbdefb;font-size:14px;">A user has submitted a help request via the Difwa App</p>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:32px 36px;">
+
+              <!-- Customer Details -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+                <tr>
+                  <td style="padding-bottom:10px;border-bottom:2px solid #e3f2fd;">
+                    <p style="margin:0;font-size:11px;font-weight:700;color:#1a73e8;letter-spacing:2px;text-transform:uppercase;">👤 Customer Details</p>
+                  </td>
+                </tr>
+                <tr><td style="padding-top:14px;">
+                  <table width="100%" cellpadding="6" cellspacing="0">
+                    <tr style="background:#f8faff;">
+                      <td style="width:30%;font-size:13px;color:#5f6368;font-weight:600;border-radius:4px 0 0 4px;padding:10px 14px;">Name</td>
+                      <td style="font-size:14px;color:#1a1a2e;font-weight:500;padding:10px 14px;">${name}</td>
+                    </tr>
+                    <tr>
+                      <td style="width:30%;font-size:13px;color:#5f6368;font-weight:600;padding:10px 14px;">Email</td>
+                      <td style="font-size:14px;color:#1a1a2e;padding:10px 14px;">${email}</td>
+                    </tr>
+                    <tr style="background:#f8faff;">
+                      <td style="width:30%;font-size:13px;color:#5f6368;font-weight:600;padding:10px 14px;">Phone</td>
+                      <td style="font-size:14px;color:#1a1a2e;padding:10px 14px;">${phone}</td>
+                    </tr>
+                    <tr>
+                      <td style="width:30%;font-size:13px;color:#5f6368;font-weight:600;padding:10px 14px;">User ID</td>
+                      <td style="font-size:13px;color:#888;font-family:monospace;padding:10px 14px;">${userId}</td>
+                    </tr>
+                  </table>
+                </td></tr>
+              </table>
+
+              <!-- Request Details -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+                <tr>
+                  <td style="padding-bottom:10px;border-bottom:2px solid #e3f2fd;">
+                    <p style="margin:0;font-size:11px;font-weight:700;color:#1a73e8;letter-spacing:2px;text-transform:uppercase;">📩 Request Details</p>
+                  </td>
+                </tr>
+                <tr><td style="padding-top:14px;">
+                  <table width="100%" cellpadding="6" cellspacing="0">
+                    <tr style="background:#f8faff;">
+                      <td style="width:30%;font-size:13px;color:#5f6368;font-weight:600;padding:10px 14px;">Ticket ID</td>
+                      <td style="font-size:13px;color:#888;font-family:monospace;padding:10px 14px;">${ticketId}</td>
+                    </tr>
+                    <tr>
+                      <td style="width:30%;font-size:13px;color:#5f6368;font-weight:600;padding:10px 14px;">Subject</td>
+                      <td style="font-size:14px;color:#1a1a2e;font-weight:600;padding:10px 14px;">${subject}</td>
+                    </tr>
+                    <tr style="background:#f8faff;">
+                      <td style="width:30%;font-size:13px;color:#5f6368;font-weight:600;padding:10px 14px;">Submitted At</td>
+                      <td style="font-size:13px;color:#444;padding:10px 14px;">${timestamp} IST</td>
+                    </tr>
+                  </table>
+                  <!-- Message Box -->
+                  <div style="margin-top:16px;background:#f0f4ff;border-left:4px solid #1a73e8;border-radius:6px;padding:16px 20px;">
+                    <p style="margin:0 0 6px;font-size:12px;color:#1a73e8;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Message</p>
+                    <p style="margin:0;font-size:14px;color:#333;line-height:1.7;white-space:pre-wrap;">"${message}"</p>
+                  </div>
+                </td></tr>
+              </table>
+
+              <!-- Quick Actions -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+                <tr>
+                  <td style="padding-bottom:10px;border-bottom:2px solid #e3f2fd;">
+                    <p style="margin:0;font-size:11px;font-weight:700;color:#1a73e8;letter-spacing:2px;text-transform:uppercase;">⚡ Quick Actions</p>
+                  </td>
+                </tr>
+                <tr><td style="padding-top:16px;">
+                  <table cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td style="padding:4px 0;">
+                        <a href="${adminPanelUrl}" style="display:inline-block;background:#1a73e8;color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:10px 20px;border-radius:8px;margin-right:10px;">👉 Open Help Requests</a>
+                        <a href="${userProfileUrl}" style="display:inline-block;background:#f1f3f4;color:#333;text-decoration:none;font-size:13px;font-weight:600;padding:10px 20px;border-radius:8px;">👤 View Users</a>
+                      </td>
+                    </tr>
+                  </table>
+                </td></tr>
+              </table>
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background:#f8faff;border-top:1px solid #e8eaf6;padding:20px 36px;text-align:center;">
+              <p style="margin:0;font-size:12px;color:#9e9e9e;">This is an automated alert from <strong>Difwa System</strong>. Do not reply directly to this email.</p>
+              <p style="margin:6px 0 0;font-size:13px;color:#1a73e8;font-weight:600;">— Difwa Notification System 💧</p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
         `,
     };
 

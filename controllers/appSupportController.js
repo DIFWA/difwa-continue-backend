@@ -16,14 +16,13 @@ export const contactAdmin = async (req, res) => {
         try {
             // Find user email if possible
             const appUser = await AppUser.findById(req.userId);
-            const userEmail = appUser?.email || "Unknown";
             
             let setting = await AppSetting.findOne();
             let adminEmails = setting?.supportEmails && setting.supportEmails.length > 0 
                 ? setting.supportEmails 
                 : ["pritamcodeservir@gmail.com"];
                 
-            await sendSupportNotificationEmail(adminEmails, subject, message, userEmail);
+            await sendSupportNotificationEmail(adminEmails, subject, message, appUser, support._id.toString());
         } catch (emailError) {
             console.error("Failed to send support notification email:", emailError);
             // Non-blocking error, so we continue
