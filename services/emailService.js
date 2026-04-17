@@ -31,7 +31,7 @@ export const sendWelcomeEmail = async (email, name) => {
       </div>
     `
     };
- 
+
     await transporter.sendMail(mailOptions);
 };
 
@@ -147,8 +147,8 @@ export const sendSupportNotificationEmail = async (emails, subject, message, app
     const userId = appUser?._id?.toString() || "N/A";
     const timestamp = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "full", timeStyle: "short" });
 
-    const adminPanelUrl = `https://admin.difwa.com/admin/support-requests`;
-    const userProfileUrl = `https://admin.difwa.com/admin/users`;
+    const adminPanelUrl = `https://difwa-admin-vendor-web.vercel.app/admin/support-requests`;
+    const userProfileUrl = `https://difwa-admin-vendor-web.vercel.app/admin/users`;
 
     const mailOptions = {
         from: `"Difwa Notification System 💧" <${process.env.EMAIL_USER}>`,
