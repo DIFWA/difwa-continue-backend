@@ -6,7 +6,7 @@ import AppSetting from "../models/AppSetting.js";
 // @access  Private/Admin
 export const getAllSupportRequests = async (req, res) => {
     try {
-        const requests = await Support.find().populate("user", "name email phone").sort({ createdAt: -1 });
+        const requests = await Support.find().populate("user", "fullName email phoneNumber").sort({ createdAt: -1 });
         res.status(200).json({ success: true, data: requests });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

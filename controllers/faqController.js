@@ -77,7 +77,7 @@ export const seedFaqs = async (req, res) => {
             },
             {
                 question: "Can I cancel an order?",
-                answer: "Orders can only be cancelled before they are in 'Processing' status. Go to 'My Orders' to check the status or contact support.",
+                answer: "Subscription orders can only be paused before they are in 'Processing' status. Once order is processing it cannot be paused.",
                 order: 4
             },
             {
@@ -102,7 +102,7 @@ export const seedFaqs = async (req, res) => {
             await Faq.insertMany(initialFaqs);
             return res.json({ success: true, message: "FAQs seeded successfully" });
         }
-        
+
         res.json({ success: true, message: "FAQs already exist" });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

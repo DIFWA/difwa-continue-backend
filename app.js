@@ -121,7 +121,7 @@ const seedIfEmpty = async () => {
                 { question: "How do I pause my subscription?", answer: "Go to the 'Daily' or 'Subscriptions' tab, tap on 'Pause Tomorrow' or enable 'Vacation Mode' for a range of dates.", order: 1 },
                 { question: "What is the cutoff time for changes?", answer: "All changes to your subscription (pausing, resuming, or modifying) must be done before 8:00 PM for the next day's delivery.", order: 2 },
                 { question: "How do I add money to my wallet?", answer: "Open 'My Wallet' from the profile or home screen, tap 'Add Money', enter the amount, and complete the payment via Razorpay.", order: 3 },
-                { question: "Can I cancel an order?", answer: "Orders can only be cancelled before they are in 'Processing' status.", order: 4 },
+                { question: "Can I cancel an order?", answer: "Subscription orders can only be paused before they are in 'Processing' status. Once order is processing it cannot be paused.", order: 4 },
                 { question: "My delivery is late, whom should I contact?", answer: "Use the 'Contact Us' form to reach admin.", order: 5 },
                 { question: "Is the water tested and pure?", answer: "Yes, all our partner water plants are certified.", order: 6 }
             ];
