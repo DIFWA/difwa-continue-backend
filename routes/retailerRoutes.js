@@ -15,6 +15,7 @@ import { searchAnything } from "../controllers/retailerSearchController.js";
 import { getDailyPrepList } from "../services/prepService.js";
 import { handleBulkOrders } from "../controllers/orderController.js";
 import { getBankAccounts, addBankAccount, deleteBankAccount, setDefaultBankAccount } from "../controllers/bankController.js";
+import { reverseGeocode } from "../services/mapService.js";
 
 const router = express.Router();
 
@@ -59,6 +60,18 @@ router.get("/prep-list", protect, retailerOnly, async (req, res) => {
         const { date } = req.query;
         const requirements = await getDailyPrepList(req.user.id, date);
         res.status(200).json({ success: true, data: requirements });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Reverse Geocode
+router.get("/reverse-geocode", protect, retailerOnly, async (req, res) => {
+    try {
+        const { lat, lng } = req.query;
+        if (!lat || !lng) return res.status(400).json({ success: false, message: "lat and lng are required" });
+        const data = await reverseGeocode(lat, lng);
+        res.status(200).json({ success: true, data });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
