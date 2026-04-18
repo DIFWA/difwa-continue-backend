@@ -1,6 +1,7 @@
 import Review from "../models/Review.js";
 import Product from "../models/Product.js";
 import Order from "../models/Order.js";
+import mongoose from "mongoose";
 
 // @desc    Create a new review
 // @route   POST /api/reviews
@@ -86,7 +87,14 @@ export const submitOrderReviews = async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid review data" });
         }
 
-        const order = await Order.findOne({ orderId, user: userId });
+        // Try to find by internal _id or human-readable orderId
+        const order = await Order.findOne({ 
+            $or: [
+                { _id: mongoose.isValidObjectId(orderId) ? orderId : null }, 
+                { orderId: orderId }
+            ], 
+            user: userId 
+        });
         if (!order) {
             return res.status(404).json({ success: false, message: "Order not found or unauthorized" });
         }
