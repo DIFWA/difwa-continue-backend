@@ -215,7 +215,7 @@ export const placeOrder = async (req, res) => {
         await emitOrderUpdate(createdOrder.orderId, "Pending", populatedOrder, identifiedRetailer, userId);
         createNotification(identifiedRetailer.toString(), {
             title: "New Order Received! 💧",
-            message: `You have a new order (#${createdOrder._id.toString().slice(-6)}) for ₹${totalAmount}${deliveryFee > 0 ? ` + ₹${deliveryFee} delivery` : ''}.`,
+            message: `You have a new order (#${createdOrder._id.toString().slice(-6)}) for ₹${totalAmount}.`,
             type: "Order",
             referenceId: createdOrder._id.toString()
         });
@@ -228,7 +228,7 @@ export const placeOrder = async (req, res) => {
         // ─── ADMIN GLOBAL NOTIFICATION ──────────────────
         notifyAdmins({
             title: "Global Order Alert 🛒",
-            message: `Order #${createdOrder._id.toString().slice(-6)} placed for ₹${totalAmount + deliveryFee} (items ₹${totalAmount}, delivery ₹${deliveryFee}).`,
+            message: `Order #${createdOrder._id.toString().slice(-6)} placed for ₹${totalAmount}.`,
             type: "Order",
             referenceId: createdOrder._id.toString()
         });
