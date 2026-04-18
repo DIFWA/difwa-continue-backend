@@ -60,4 +60,17 @@ const ProductSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
+ProductSchema.pre('save', function (next) {
+    if (this.isModified('stock')) {
+        if (this.stock <= 0) {
+            this.stockStatus = "Out of Stock";
+        } else if (this.stock < 10) {
+            this.stockStatus = "Low Stock";
+        } else {
+            this.stockStatus = "In Stock";
+        }
+    }
+    next();
+});
+
 export default mongoose.model("Product", ProductSchema);

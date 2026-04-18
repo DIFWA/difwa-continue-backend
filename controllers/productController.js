@@ -49,9 +49,19 @@ export const createProduct = async (req, res) => {
 export const updateProduct = async (req, res) => {
     try {
         const { id } = req.params;
+        const updateData = { ...req.body };
+        
+        // Auto-calculate stockStatus if stock is provided
+        if (updateData.stock !== undefined) {
+            const stock = Number(updateData.stock);
+            if (stock <= 0) updateData.stockStatus = "Out of Stock";
+            else if (stock < 10) updateData.stockStatus = "Low Stock";
+            else updateData.stockStatus = "In Stock";
+        }
+
         const product = await Product.findOneAndUpdate(
             { _id: id, retailer: req.user._id },
-            req.body,
+            updateData,
             { new: true, runValidators: true }
         ).populate("category", "name");
         if (!product) return res.status(404).json({ success: false, message: "Product not found" });
