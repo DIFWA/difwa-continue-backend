@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 import otpGenerator from "otp-generator";
 import AppUser from "../models/AppUser.js";
 import Otp from "../models/Otp.js";
-import { sendWelcomeEmail } from "../services/emailService.js";
+import { sendWelcomeEmail, sendEmailUpdateNotification } from "../services/emailService.js";
 import admin from "firebase-admin";
 import User from "../models/User.js";
 // Register
@@ -398,11 +398,13 @@ export const updateProfile = async (req, res) => {
 
         await user.save();
 
-        // send welcome email (non-blocking)
-        try {
-            await sendWelcomeEmail(user.email, user.fullName);
-        } catch (error) {
-            console.log("Welcome email failed:", error.message);
+        // send email update notification if email was changed (non-blocking)
+        if (updates.includes("email")) {
+            try {
+                await sendEmailUpdateNotification(user.email, user.fullName);
+            } catch (error) {
+                console.log("Email update notification failed:", error.message);
+            }
         }
 
         return res.status(200).json({ success: true, message: "Profile updated successfully", updatedFields: updates, data: user });

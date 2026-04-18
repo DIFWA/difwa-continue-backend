@@ -1,16 +1,18 @@
 import nodemailer from "nodemailer";
 
 const transporter = nodemailer.createTransport({
-    service: "gmail",
+    host: process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT),
+    secure: false, // true for 465, false for other ports
     auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
     }
 });
 
 export const sendWelcomeEmail = async (email, name) => {
     const mailOptions = {
-        from: `"Difwa Water" <${process.env.EMAIL_USER}>`,
+        from: `"Difwa Water" <${process.env.SMTP_USER}>`,
         to: email,
         subject: "Welcome to Difwa Water",
         html: `
@@ -37,7 +39,7 @@ export const sendWelcomeEmail = async (email, name) => {
 
 export const sendInviteEmail = async (email, password, roleName) => {
     const mailOptions = {
-        from: `"Difwa Admin" <${process.env.EMAIL_USER}>`,
+        from: `"Difwa Admin" <${process.env.SMTP_USER}>`,
         to: email,
         subject: "Invitation to Join Difwa Admin Panel",
         html: `
@@ -68,7 +70,7 @@ export const sendInviteEmail = async (email, password, roleName) => {
 
 export const sendOtpEmail = async (email, otp) => {
     const mailOptions = {
-        from: `"Difwa" <${process.env.EMAIL_USER}>`,
+        from: `"Difwa" <${process.env.SMTP_USER}>`,
         to: email,
         subject: "Your One-Time Password (OTP) for Difwa",
         html: `
@@ -97,7 +99,7 @@ export const sendMarketingEmail = async (emails, subject, htmlContent) => {
     // Send to bulk emails in one go (comma-separated 'to' or 'bcc' for privacy)
     // Using BCC is better for bulk marketing to prevent recipients from seeing each other's emails
     const mailOptions = {
-        from: `"Difwa Marketing 🚀" <${process.env.EMAIL_USER}>`,
+        from: `"Difwa Marketing 🚀" <${process.env.SMTP_USER}>`,
         bcc: emails, // Use BCC for bulk
         subject: subject,
         html: htmlContent,
@@ -114,7 +116,7 @@ export const sendMarketingEmail = async (emails, subject, htmlContent) => {
 
 export const sendLowStockEmail = async (email, productName, stockCount) => {
     const mailOptions = {
-        from: `"Difwa Alert" <${process.env.EMAIL_USER}>`,
+        from: `"Difwa Alert" <${process.env.SMTP_USER}>`,
         to: email,
         subject: `Low Stock Alert: ${productName}`,
         html: `
@@ -151,7 +153,7 @@ export const sendSupportNotificationEmail = async (emails, subject, message, app
     const userProfileUrl = `https://difwa-admin-vendor-web.vercel.app/admin/users`;
 
     const mailOptions = {
-        from: `"Difwa Notification System 💧" <${process.env.EMAIL_USER}>`,
+        from: `"Difwa Notification System 💧" <${process.env.SMTP_USER}>`,
         bcc: emails,
         subject: `[Support Alert] New Request: ${subject}`,
         html: `
@@ -284,6 +286,66 @@ export const sendSupportNotificationEmail = async (emails, subject, message, app
         return true;
     } catch (error) {
         console.error("Error sending support notification email:", error);
+        return false;
+    }
+};
+
+export const sendEmailUpdateNotification = async (email, name) => {
+    const mailOptions = {
+        from: `"Difwa Water" <${process.env.SMTP_USER}>`,
+        to: email,
+        subject: "Your Difwa Account Email has been Updated",
+        html: `
+            <div style="font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 0; border: 1px solid #eef2f6; border-radius: 20px; overflow: hidden; background-color: #ffffff; color: #374151; line-height: 1.6;">
+                <!-- Header with Logo -->
+                <div style="background-color: #f8fafc; padding: 30px; text-align: center; border-bottom: 1px solid #f1f5f9;">
+                    <img src="https://res.cloudinary.com/dwemun2dn/image/upload/v1744961012/loginlogo_qfjt9o.png" alt="Difwa Logo" style="width: 80px; height: auto; margin-bottom: 15px;">
+                    <h1 style="margin: 0; color: #1e40af; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">Account Update</h1>
+                </div>
+
+                <div style="padding: 40px 30px;">
+                    <h2 style="color: #111827; margin-top: 0; font-size: 20px;">Hi ${name},</h2>
+                    
+                    <p style="font-size: 16px; color: #4b5563;">Your email address has been successfully updated on your Difwa account.</p>
+                    
+                    <p style="color: #4b5563;">Thank you for trusting <strong>Difwa</strong> for your essential water services.</p>
+                    
+                    <div style="background-color: #fff1f2; border-left: 4px solid #e11d48; padding: 20px; margin: 30px 0; border-radius: 12px;">
+                        <p style="margin: 0; font-size: 14px; color: #9f1239; font-weight: 500;">
+                            <strong>🔒 Security Notice:</strong> If you did not authorize this change, please contact our support team immediately to secure your account.
+                        </p>
+                    </div>
+
+                    <div style="background-color: #f0f9ff; border-radius: 16px; padding: 25px; margin-top: 30px;">
+                        <p style="font-weight: 700; color: #0369a1; margin-top: 0; margin-bottom: 15px; font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px;">Maximize your experience:</p>
+                        <div style="margin-bottom: 5px;">
+                            <p style="margin: 12px 0; font-size: 15px;">🚀 <strong>Get the App:</strong> <a href="https://play.google.com/store/apps/details?id=com.difmo.difwa" style="color: #0284c7; text-decoration: none; font-weight: 600;">Download on Play Store</a></p>
+                            <p style="margin: 12px 0; font-size: 15px;">🌐 <strong>Our Website:</strong> <a href="https://www.difwa.com/" style="color: #0284c7; text-decoration: none; font-weight: 600;">www.difwa.com</a></p>
+                        </div>
+                    </div>
+
+                    <p style="margin-top: 35px; color: #64748b; font-size: 14px;">We are committed to providing a safe, reliable, and seamless experience for all your water delivery needs.</p>
+                    
+                    <div style="margin-top: 40px; border-top: 2px solid #f1f5f9; padding-top: 30px;">
+                        <p style="margin: 0; color: #94a3b8; font-size: 13px; font-weight: 700; text-transform: uppercase;">Stay hydrated,</p>
+                        <p style="margin: 5px 0; color: #1d4ed8; font-size: 22px; font-weight: 900; letter-spacing: -0.5px;">Team Difwa</p>
+                        <p style="margin: 10px 0 0;"><a href="mailto:difwaservices@gmail.com" style="color: #3b82f6; text-decoration: none; font-weight: 500; font-size: 14px;">difwaservices@gmail.com</a></p>
+                    </div>
+                </div>
+
+                <!-- Subtle Footer -->
+                <div style="background-color: #f8fafc; padding: 20px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9;">
+                    © 2026 Difwa Water Services. All rights reserved.
+                </div>
+            </div>
+        `
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        return true;
+    } catch (error) {
+        console.error("Error sending email update notification:", error);
         return false;
     }
 };
