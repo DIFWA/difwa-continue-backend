@@ -78,6 +78,7 @@ router.delete("/address/:id", protectAppUser, deleteAddress);
 
 //update address
 router.put("/address/:id", protectAppUser, updateAddress);
+router.post("/address/update", protectAppUser, updateAddress); // For Flutter compatibility
 
 // --- Cart ---
 router.get("/cart", protectAppUser, getCart);
