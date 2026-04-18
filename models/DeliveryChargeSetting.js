@@ -37,6 +37,14 @@ const deliveryChargeSettingSchema = new mongoose.Schema({
             changedAt: { type: Date, default: Date.now },
             note: { type: String }
         }
+    ],
+    // Admin-defined preset slab options that retailers can choose from
+    retailerSlabOptions: [
+        {
+            minKm: { type: Number, required: true },
+            maxKm: { type: Number, required: true },
+            charge: { type: Number, required: true, min: 0 }
+        }
     ]
 }, { timestamps: true });
 

@@ -102,6 +102,19 @@ const userSchema = new mongoose.Schema({
         type: String,
         default: null
     },
+    // Whether the retailer can set their own delivery charges
+    deliveryChargePermission: {
+        type: Boolean,
+        default: false
+    },
+    // Retailer's own custom delivery slabs (if deliveryChargePermission is true)
+    retailerDeliverySlabs: [
+        {
+            minKm: { type: Number, required: true },
+            maxKm: { type: Number, required: true },
+            charge: { type: Number, required: true, min: 0 }
+        }
+    ],
     resetPasswordToken: { type: String, default: null },
     resetPasswordExpires: { type: Date, default: null },
     otp: { type: String, default: null },

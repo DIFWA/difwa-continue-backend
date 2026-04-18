@@ -49,6 +49,11 @@ const orderSchema = new mongoose.Schema({
         type: Number, // distance in km
         default: 0
     },
+    deliveryChargeOwner: {
+        type: String,
+        enum: ["platform", "retailer"],
+        default: "platform"
+    },
     status: {
         type: String,
         enum: ["Pending", "Accepted", "Processing", "Preparing", "Shipped", "Out for Delivery", "Delivered", "Completed", "Cancelled", "Rider Assigned", "Rider Accepted"],

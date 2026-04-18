@@ -111,8 +111,9 @@ export const placeOrder = async (req, res) => {
         // 3a. Calculate delivery fee
         let deliveryFee = 0;
         let distanceKm = 0;
+        let deliveryChargeOwner = "platform"; // who gets the delivery income
 
-        const retailerUser = await User.findById(identifiedRetailer).select("businessDetails.location");
+        const retailerUser = await User.findById(identifiedRetailer).select("businessDetails.location deliveryChargePermission retailerDeliverySlabs");
         const vendorCoords = retailerUser?.businessDetails?.location?.coordinates;
         const userCoords = deliveryAddress?.coordinates; // { lat, lng } sent from app
 
@@ -125,18 +126,25 @@ export const placeOrder = async (req, res) => {
                     parseFloat(userCoords.lng)
                 );
                 const deliverySetting = await getDeliveryChargeSetting();
-                const result = resolveDeliveryCharge(distanceKm, deliverySetting);
+
+                // Use retailer's own slabs if they have permission and slabs are set
+                let slabsToUse = deliverySetting.slabs;
+                if (retailerUser.deliveryChargePermission && retailerUser.retailerDeliverySlabs?.length > 0) {
+                    slabsToUse = retailerUser.retailerDeliverySlabs;
+                    deliveryChargeOwner = "retailer";
+                }
+
+                const result = resolveDeliveryCharge(distanceKm, { ...deliverySetting.toObject(), slabs: slabsToUse });
                 if (!result.deliverable) {
                     throw new Error(`Delivery not available. Distance ${distanceKm} km exceeds maximum ${deliverySetting.maxDeliveryKm} km.`);
                 }
                 deliveryFee = result.charge;
             } catch (err) {
-                // If the error is a deliverability error, re-throw it
                 if (err.message.startsWith("Delivery not available")) throw err;
-                // Otherwise, log and continue with ₹0 fee (graceful fallback)
                 console.warn("Delivery fee calculation skipped:", err.message);
             }
         }
+
 
         // 4. Create Order ID (Matches mobile app display format)
         const newOrderId = new mongoose.Types.ObjectId();
@@ -166,6 +174,7 @@ export const placeOrder = async (req, res) => {
             totalAmount,
             deliveryFee,
             distance: distanceKm,
+            deliveryChargeOwner,
             deliveryAddress,
             paymentMethod,
             deliverySlot: deliverySlot || null,

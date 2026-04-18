@@ -21,14 +21,13 @@ export const getDeliveryChargeSettings = async (req, res) => {
 // ─── ADMIN: Update delivery charge slabs ───────────────────────────────────
 export const updateDeliveryChargeSettings = async (req, res) => {
     try {
-        const { slabs, maxDeliveryKm, note } = req.body;
+        const { slabs, maxDeliveryKm, note, retailerSlabOptions } = req.body;
         const adminId = req.user?.id || req.user?._id;
 
         if (!slabs || !Array.isArray(slabs) || slabs.length === 0) {
             return res.status(400).json({ success: false, message: "Slabs array is required" });
         }
 
-        // Validate each slab
         for (const slab of slabs) {
             if (slab.minKm === undefined || slab.maxKm === undefined || slab.charge === undefined) {
                 return res.status(400).json({ success: false, message: "Each slab must have minKm, maxKm and charge" });
@@ -44,9 +43,13 @@ export const updateDeliveryChargeSettings = async (req, res) => {
         let setting = await DeliveryChargeSetting.findOne({ isActive: true });
 
         if (!setting) {
-            setting = new DeliveryChargeSetting({ slabs, maxDeliveryKm: maxDeliveryKm || 30, updatedBy: adminId });
+            setting = new DeliveryChargeSetting({
+                slabs,
+                maxDeliveryKm: maxDeliveryKm || 30,
+                updatedBy: adminId,
+                retailerSlabOptions: retailerSlabOptions || []
+            });
         } else {
-            // Save old config to history
             setting.history.push({
                 slabs: setting.slabs,
                 maxDeliveryKm: setting.maxDeliveryKm,
@@ -56,6 +59,9 @@ export const updateDeliveryChargeSettings = async (req, res) => {
             setting.slabs = slabs;
             setting.maxDeliveryKm = maxDeliveryKm || setting.maxDeliveryKm;
             setting.updatedBy = adminId;
+            if (retailerSlabOptions !== undefined) {
+                setting.retailerSlabOptions = retailerSlabOptions;
+            }
         }
 
         await setting.save();
@@ -65,8 +71,116 @@ export const updateDeliveryChargeSettings = async (req, res) => {
     }
 };
 
+// ─── ADMIN: Toggle delivery charge permission for a retailer ──────────────
+// PATCH /api/delivery-charge/retailer-permission/:retailerId
+export const toggleRetailerDeliveryPermission = async (req, res) => {
+    try {
+        const { retailerId } = req.params;
+        const retailer = await User.findById(retailerId);
+        if (!retailer || retailer.role !== "retailer") {
+            return res.status(404).json({ success: false, message: "Retailer not found" });
+        }
+        retailer.deliveryChargePermission = !retailer.deliveryChargePermission;
+        await retailer.save();
+        res.status(200).json({
+            success: true,
+            message: `Delivery charge permission ${retailer.deliveryChargePermission ? "granted" : "revoked"} for ${retailer.name}`,
+            deliveryChargePermission: retailer.deliveryChargePermission
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// ─── ADMIN: Update only retailerSlabOptions ────────────────────────────────
+// PUT /api/delivery-charge/retailer-slab-options
+export const updateRetailerSlabOptions = async (req, res) => {
+    try {
+        const { retailerSlabOptions } = req.body;
+        if (!Array.isArray(retailerSlabOptions)) {
+            return res.status(400).json({ success: false, message: "retailerSlabOptions must be an array" });
+        }
+        for (const opt of retailerSlabOptions) {
+            if (opt.minKm >= opt.maxKm) {
+                return res.status(400).json({ success: false, message: "Invalid option: minKm must be less than maxKm" });
+            }
+            if (opt.charge < 0) {
+                return res.status(400).json({ success: false, message: "Charge cannot be negative" });
+            }
+        }
+        let setting = await DeliveryChargeSetting.findOne({ isActive: true });
+        if (!setting) {
+            setting = new DeliveryChargeSetting({ slabs: [], retailerSlabOptions });
+        } else {
+            setting.retailerSlabOptions = retailerSlabOptions;
+        }
+        await setting.save();
+        res.status(200).json({ success: true, message: "Retailer slab options updated", data: setting.retailerSlabOptions });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// ─── RETAILER: Get their own delivery charge settings ─────────────────────
+// GET /api/retailer/delivery-charges
+export const getRetailerDeliveryCharges = async (req, res) => {
+    try {
+        const retailer = await User.findById(req.user.id).select("deliveryChargePermission retailerDeliverySlabs");
+        if (!retailer) return res.status(404).json({ success: false, message: "Retailer not found" });
+
+        const globalSetting = await getDeliveryChargeSetting();
+
+        res.status(200).json({
+            success: true,
+            data: {
+                deliveryChargePermission: retailer.deliveryChargePermission,
+                retailerDeliverySlabs: retailer.retailerDeliverySlabs || [],
+                availableSlabOptions: globalSetting.retailerSlabOptions || [],
+                maxDeliveryKm: globalSetting.maxDeliveryKm
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// ─── RETAILER: Update their own delivery charge slabs ────────────────────
+// PUT /api/retailer/delivery-charges
+export const updateRetailerDeliveryCharges = async (req, res) => {
+    try {
+        const { slabs } = req.body;
+        const retailer = await User.findById(req.user.id);
+        if (!retailer) return res.status(404).json({ success: false, message: "Retailer not found" });
+
+        if (!retailer.deliveryChargePermission) {
+            return res.status(403).json({ success: false, message: "You do not have permission to set custom delivery charges" });
+        }
+
+        if (!Array.isArray(slabs)) {
+            return res.status(400).json({ success: false, message: "slabs must be an array" });
+        }
+
+        for (const slab of slabs) {
+            if (slab.minKm >= slab.maxKm) {
+                return res.status(400).json({ success: false, message: "Invalid slab: minKm must be less than maxKm" });
+            }
+            if (slab.charge < 0) {
+                return res.status(400).json({ success: false, message: "Charge cannot be negative" });
+            }
+        }
+
+        retailer.retailerDeliverySlabs = slabs;
+        retailer.markModified("retailerDeliverySlabs");
+        await retailer.save();
+
+        res.status(200).json({ success: true, message: "Delivery charges updated", data: retailer.retailerDeliverySlabs });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // ─── APP: Calculate delivery charge before checkout ─────────────────────────
-// POST /api/orders/calculate-delivery-fee
+// POST /api/delivery-charge/calculate
 // Body: { vendorId, userLat, userLng } OR { vendorId, addressId }
 export const calculateDeliveryFee = async (req, res) => {
     try {
@@ -77,8 +191,7 @@ export const calculateDeliveryFee = async (req, res) => {
             return res.status(400).json({ success: false, message: "vendorId is required" });
         }
 
-        // 1. Get vendor/retailer coordinates
-        const vendor = await User.findById(vendorId).select("businessDetails.location");
+        const vendor = await User.findById(vendorId).select("businessDetails.location deliveryChargePermission retailerDeliverySlabs");
         if (!vendor) {
             return res.status(404).json({ success: false, message: "Vendor not found" });
         }
@@ -91,11 +204,9 @@ export const calculateDeliveryFee = async (req, res) => {
             });
         }
 
-        // 2. Get user delivery coordinates
         let destLat = userLat;
         let destLng = userLng;
 
-        // If userLat/Lng not provided, try to get from saved address
         if ((!destLat || !destLng) && addressId) {
             const user = await AppUser.findById(userId).select("addresses");
             const addr = user?.addresses?.id(addressId);
@@ -112,7 +223,6 @@ export const calculateDeliveryFee = async (req, res) => {
             });
         }
 
-        // 3. Calculate distance
         const distanceKm = await calculateDistanceKm(
             vendorCoords.lat,
             vendorCoords.lng,
@@ -120,17 +230,24 @@ export const calculateDeliveryFee = async (req, res) => {
             parseFloat(destLng)
         );
 
-        // 4. Get admin slab settings and resolve charge
-        const setting = await getDeliveryChargeSetting();
-        const { charge, slab, deliverable } = resolveDeliveryCharge(distanceKm, setting);
+        const globalSetting = await getDeliveryChargeSetting();
+        let slabsToUse = globalSetting.slabs;
+        let chargeOwner = "platform";
+
+        if (vendor.deliveryChargePermission && vendor.retailerDeliverySlabs && vendor.retailerDeliverySlabs.length > 0) {
+            slabsToUse = vendor.retailerDeliverySlabs;
+            chargeOwner = "retailer";
+        }
+
+        const { charge, slab, deliverable } = resolveDeliveryCharge(distanceKm, { ...globalSetting.toObject(), slabs: slabsToUse });
 
         if (!deliverable) {
             return res.status(200).json({
                 success: true,
                 deliverable: false,
                 distanceKm,
-                maxDeliveryKm: setting.maxDeliveryKm,
-                message: `Sorry, delivery is not available beyond ${setting.maxDeliveryKm} km. Your distance is ${distanceKm} km.`
+                maxDeliveryKm: globalSetting.maxDeliveryKm,
+                message: `Sorry, delivery is not available beyond ${globalSetting.maxDeliveryKm} km. Your distance is ${distanceKm} km.`
             });
         }
 
@@ -140,11 +257,8 @@ export const calculateDeliveryFee = async (req, res) => {
             distanceKm,
             deliveryFee: charge,
             isFreeDelivery: charge === 0,
-            slab: {
-                from: slab.minKm,
-                to: slab.maxKm,
-                charge: slab.charge
-            },
+            chargeOwner,
+            slab: { from: slab.minKm, to: slab.maxKm, charge: slab.charge },
             message: charge === 0
                 ? "Free delivery for your area!"
                 : `Delivery charge ₹${charge} applies for ${distanceKm} km distance.`
@@ -157,7 +271,6 @@ export const calculateDeliveryFee = async (req, res) => {
 };
 
 // ─── ADMIN: Get delivery income report ────────────────────────────────────
-// GET /api/admin/delivery-income?page=1&limit=20&from=&to=
 export const getDeliveryIncomeReport = async (req, res) => {
     try {
         const { page = 1, limit = 20, from, to } = req.query;
@@ -165,7 +278,6 @@ export const getDeliveryIncomeReport = async (req, res) => {
         const limitNum = parseInt(limit);
         const skip = (pageNum - 1) * limitNum;
 
-        // Date filter
         const dateFilter = {};
         if (from) dateFilter.$gte = new Date(from);
         if (to) {
@@ -181,7 +293,7 @@ export const getDeliveryIncomeReport = async (req, res) => {
 
         const orders = await Order.find(query)
             .populate("user", "fullName phoneNumber")
-            .populate("items.retailer", "name businessDetails.businessName businessDetails.location")
+            .populate("items.retailer", "name businessDetails.businessName deliveryChargePermission")
             .select("orderId totalAmount deliveryFee distance commissionAmount commissionRate createdAt status paymentMethod")
             .sort({ createdAt: -1 })
             .skip(skip)
@@ -189,7 +301,6 @@ export const getDeliveryIncomeReport = async (req, res) => {
 
         const totalCount = await Order.countDocuments(query);
 
-        // Aggregate totals
         const totals = await Order.aggregate([
             { $match: query },
             {
@@ -225,6 +336,33 @@ export const getDeliveryIncomeReport = async (req, res) => {
                     limit: limitNum
                 }
             }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// ─── RETAILER: Get their own delivery income ──────────────────────────────
+// GET /api/retailer/delivery-income
+export const getRetailerDeliveryIncome = async (req, res) => {
+    try {
+        const retailerId = req.user.id;
+        const retailer = await User.findById(retailerId).select("deliveryChargePermission");
+        if (!retailer || !retailer.deliveryChargePermission) {
+            return res.status(200).json({ success: true, data: { totalDeliveryIncome: 0, totalOrders: 0, orders: [] } });
+        }
+
+        const orders = await Order.find({
+            "items.retailer": retailerId,
+            status: { $in: ["Delivered", "Completed"] },
+            deliveryFee: { $gt: 0 }
+        }).select("orderId totalAmount deliveryFee createdAt").sort({ createdAt: -1 }).limit(50);
+
+        const totalDeliveryIncome = orders.reduce((sum, o) => sum + (o.deliveryFee || 0), 0);
+
+        res.status(200).json({
+            success: true,
+            data: { totalDeliveryIncome, totalOrders: orders.length, orders }
         });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
