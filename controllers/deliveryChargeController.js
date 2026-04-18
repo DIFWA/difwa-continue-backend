@@ -232,10 +232,11 @@ export const calculateDeliveryFee = async (req, res) => {
 
         const globalSetting = await getDeliveryChargeSetting();
         let slabsToUse = globalSetting.slabs;
-        let chargeOwner = "retailer"; // delivery income always goes to the retailer
+        let chargeOwner = "platform";
 
         if (vendor.deliveryChargePermission && vendor.retailerDeliverySlabs && vendor.retailerDeliverySlabs.length > 0) {
             slabsToUse = vendor.retailerDeliverySlabs;
+            chargeOwner = "retailer";
         }
 
         const { charge, slab, deliverable } = resolveDeliveryCharge(distanceKm, { ...globalSetting.toObject(), slabs: slabsToUse });
@@ -306,6 +307,9 @@ export const getDeliveryIncomeReport = async (req, res) => {
                 $group: {
                     _id: null,
                     totalDeliveryIncome: { $sum: "$deliveryFee" },
+                    totalPlatformDeliveryIncome: {
+                        $sum: { $cond: [{ $eq: ["$deliveryChargeOwner", "platform"] }, "$deliveryFee", 0] }
+                    },
                     totalCommissionIncome: { $sum: "$commissionAmount" },
                     totalOrderValue: { $sum: "$totalAmount" },
                     totalOrders: { $sum: 1 }
@@ -315,6 +319,7 @@ export const getDeliveryIncomeReport = async (req, res) => {
 
         const summary = totals[0] || {
             totalDeliveryIncome: 0,
+            totalPlatformDeliveryIncome: 0,
             totalCommissionIncome: 0,
             totalOrderValue: 0,
             totalOrders: 0
@@ -326,7 +331,7 @@ export const getDeliveryIncomeReport = async (req, res) => {
                 orders,
                 summary: {
                     ...summary,
-                    totalPlatformIncome: summary.totalCommissionIncome
+                    totalPlatformIncome: summary.totalPlatformDeliveryIncome + summary.totalCommissionIncome
                 },
                 pagination: {
                     total: totalCount,
@@ -354,7 +359,8 @@ export const getRetailerDeliveryIncome = async (req, res) => {
         const orders = await Order.find({
             "items.retailer": retailerId,
             status: { $in: ["Delivered", "Completed"] },
-            deliveryFee: { $gt: 0 }
+            deliveryFee: { $gt: 0 },
+            deliveryChargeOwner: "retailer"
         }).select("orderId totalAmount deliveryFee createdAt").sort({ createdAt: -1 }).limit(50);
 
         const totalDeliveryIncome = orders.reduce((sum, o) => sum + (o.deliveryFee || 0), 0);
