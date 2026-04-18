@@ -13,6 +13,7 @@ import {
     changePassword,
     forgotPassword,
     addAddress,
+    updateAddress,
     getAddresses,
     deleteAddress,
     sendOtp,
@@ -74,6 +75,9 @@ router.get("/address", protectAppUser, getAddresses);
 
 //delete address
 router.delete("/address/:id", protectAppUser, deleteAddress);
+
+//update address
+router.put("/address/:id", protectAppUser, updateAddress);
 
 // --- Cart ---
 router.get("/cart", protectAppUser, getCart);

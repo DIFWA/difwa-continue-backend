@@ -71,7 +71,8 @@ export const placeOrder = async (req, res) => {
                     city: defaultAddress.city,
                     state: defaultAddress.state,
                     pincode: defaultAddress.pincode,
-                    label: defaultAddress.label
+                    label: defaultAddress.label,
+                    coordinates: defaultAddress.coordinates
                 };
             }
         }

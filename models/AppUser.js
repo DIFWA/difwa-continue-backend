@@ -53,7 +53,11 @@ const appUserSchema = new mongoose.Schema(
                 city: String,
                 state: String,
                 pincode: String,
-                isDefault: { type: Boolean, default: false }
+                isDefault: { type: Boolean, default: false },
+                coordinates: {
+                    lat: Number,
+                    lng: Number
+                }
             }
         ],
         isVerified: {

@@ -535,8 +535,22 @@ export const addAddress = async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid address data provided" });
         }
 
+        // Prepare address object with coordinates if present
+        const newAddress = {
+            label: addressData.label,
+            fullAddress: addressData.fullAddress,
+            city: addressData.city,
+            state: addressData.state,
+            pincode: addressData.pincode,
+            isDefault: addressData.isDefault || false,
+            coordinates: addressData.coordinates || (addressData.lat && addressData.lng ? {
+                lat: parseFloat(addressData.lat),
+                lng: parseFloat(addressData.lng)
+            } : null)
+        };
+
         // If isDefault is true, unset previous defaults
-        if (addressData.isDefault) {
+        if (newAddress.isDefault) {
             user.addresses = user.addresses.map(a => ({ ...a.toObject(), isDefault: false }));
         }
 
@@ -544,12 +558,57 @@ export const addAddress = async (req, res) => {
             user.fullName = fullName;
         }
 
-        user.addresses.push(addressData);
+        user.addresses.push(newAddress);
         await user.save();
 
         return res.status(201).json({ success: true, message: "Address added", data: user.addresses });
     } catch (error) {
         console.error("addAddress error:", error);
+        return res.status(500).json({ success: false, message: "Server error", error: error.message });
+    }
+};
+
+// Update address
+export const updateAddress = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const user = await AppUser.findById(req.user._id);
+        if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+        const addressData = req.body.address || req.body;
+        const address = user.addresses.id(id);
+
+        if (!address) {
+            return res.status(404).json({ success: false, message: "Address not found" });
+        }
+
+        // If setting this one as default, unset others
+        if (addressData.isDefault) {
+            user.addresses.forEach(a => { a.isDefault = false; });
+        }
+
+        // Update fields
+        if (addressData.label) address.label = addressData.label;
+        if (addressData.fullAddress) address.fullAddress = addressData.fullAddress;
+        if (addressData.city) address.city = addressData.city;
+        if (addressData.state) address.state = addressData.state;
+        if (addressData.pincode) address.pincode = addressData.pincode;
+        if (addressData.isDefault !== undefined) address.isDefault = addressData.isDefault;
+        
+        // Handle coordinates
+        if (addressData.coordinates) {
+            address.coordinates = addressData.coordinates;
+        } else if (addressData.lat && addressData.lng) {
+            address.coordinates = {
+                lat: parseFloat(addressData.lat),
+                lng: parseFloat(addressData.lng)
+            };
+        }
+
+        await user.save();
+        return res.status(200).json({ success: true, message: "Address updated", data: user.addresses });
+    } catch (error) {
+        console.error("updateAddress error:", error);
         return res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
