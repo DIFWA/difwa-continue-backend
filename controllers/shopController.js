@@ -527,7 +527,10 @@ export const getRetailerOrders = async (req, res) => {
             .limit(parseInt(limit));
 
         // Get overall stats (including non-paginated status counts)
-        const allOrdersForStats = await Order.find(query).select("status totalAmount items");
+        // We use a separate query for stats that IGNORES the statusFilter to keep cards global
+        const statsQuery = { "items.retailer": retailerId };
+        if (customerId) statsQuery.user = customerId;
+        const allOrdersForStats = await Order.find(statsQuery).select("status totalAmount items");
         let pendingOrders = 0;
         let completedOrders = 0;
         let totalRevenue = 0;
@@ -596,11 +599,11 @@ export const getRetailerOrders = async (req, res) => {
                     limit: parseInt(limit)
                 },
                 stats: {
-                    totalOrders: totalItemsCount,
+                    totalOrders: allOrdersForStats.length,
                     pendingOrders,
                     completedOrders,
                     totalRevenue: totalRevenue.toFixed(2),
-                    avgOrderValue: totalItemsCount > 0 ? (totalRevenue / totalItemsCount).toFixed(2) : "0"
+                    avgOrderValue: allOrdersForStats.length > 0 ? (totalRevenue / allOrdersForStats.length).toFixed(2) : "0"
                 }
             }
         });
