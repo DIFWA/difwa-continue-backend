@@ -114,60 +114,11 @@ export const onboardUser = async (req, res) => {
                 message: `Invalid value for field: ${error.path}`
             })
         }
-
-        res.status(500).json({ message: "Something went wrong Local test" })
+        res.status(500).json({ message: error.message || "Something went wrong" })
     }
 }
 
-// Get Me (Current User)
-export const getCurrentUser = async (req, res) => {
-    try {
-        const user = await User.findById(req.params.id).populate("roleId")
-        if (!user) return res.status(404).json({ message: "User not found" })
-
-        const userObj = user.toObject();
-        userObj.permissions = user.permissions && user.permissions.length > 0 ? user.permissions : (user.roleId?.permissions || []);
-
-        res.status(200).json({ success: true, data: userObj })
-    } catch (error) {
-        console.error(error)
-        res.status(500).json({ message: "Something went wrong" })
-    }
-}
-
-// Update Retailer Profile (Shop Settings)
-export const updateRetailerProfile = async (req, res) => {
-    try {
-        const { businessDetails, whatsappNumber, name } = req.body;
-        const user = await User.findById(req.user.id);
-
-        if (!user) return res.status(404).json({ message: "Retailer not found" });
-
-        if (businessDetails) {
-            user.businessDetails = {
-                ...user.toObject().businessDetails,
-                ...businessDetails,
-                location: {
-                    ...(user.businessDetails?.location || {}),
-                    ...(businessDetails.location || {})
-                }
-            };
-            user.markModified("businessDetails");
-        }
-
-        if (whatsappNumber !== undefined) user.whatsappNumber = whatsappNumber;
-        if (name !== undefined) user.name = name; // Also allow updating name
-        if (req.body.fcmToken !== undefined) user.fcmToken = req.body.fcmToken;
-
-        await user.save();
-        res.status(200).json({ success: true, message: "Profile updated successfully", data: user });
-    } catch (error) {
-        console.error("Profile Update Error:", error);
-        res.status(500).json({ message: error.message || "Something went wrong" });
-    }
-};
-
-export const loginRegisterWithMobileNumber = async (req, res) => {
+export const sendOtp = async (req, res) => {
     try {
         const { phoneNumber } = req.body
         console.log(req.body, " this is my request body")
