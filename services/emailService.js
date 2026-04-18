@@ -297,10 +297,10 @@ export const sendEmailUpdateNotification = async (email, name) => {
         subject: "Your Difwa Account Email has been Updated",
         html: `
             <div style="font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 0; border: 1px solid #eef2f6; border-radius: 20px; overflow: hidden; background-color: #ffffff; color: #374151; line-height: 1.6;">
-                <!-- Header with Logo -->
+                <!-- Header -->
                 <div style="background-color: #f8fafc; padding: 30px; text-align: center; border-bottom: 1px solid #f1f5f9;">
-                    <img src="https://res.cloudinary.com/dwemun2dn/image/upload/v1744961012/loginlogo_qfjt9o.png" alt="Difwa Logo" style="width: 80px; height: auto; margin-bottom: 15px;">
-                    <h1 style="margin: 0; color: #1e40af; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">Account Update</h1>
+                    <div style="font-size: 28px; font-weight: 900; color: #1e40af; margin-bottom: 5px; letter-spacing: -1px;">DIFWA WATER</div>
+                    <div style="color: #64748b; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px;">Account Security Alert</div>
                 </div>
 
                 <div style="padding: 40px 30px;">
