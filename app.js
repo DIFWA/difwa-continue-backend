@@ -26,6 +26,7 @@ import appSupportRoutes from "./routes/appSupportRoutes.js";
 import appNotificationRoutes from "./routes/appNotificationRoutes.js";
 import faqRoutes from "./routes/faqRoutes.js";
 import deliveryChargeRoutes from "./routes/deliveryChargeRoutes.js";
+import bannerRoutes from "./routes/bannerRoutes.js";
 import Faq from "./models/Faq.js";
 const app = express()
 
@@ -98,6 +99,7 @@ app.use("/orders", orderRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api/cron", cronRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/banners", bannerRoutes);
 
 app.use("/api/app/favorites", favoriteRoutes);
 app.use("/app/favorites", favoriteRoutes);
