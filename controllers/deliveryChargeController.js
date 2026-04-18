@@ -232,11 +232,10 @@ export const calculateDeliveryFee = async (req, res) => {
 
         const globalSetting = await getDeliveryChargeSetting();
         let slabsToUse = globalSetting.slabs;
-        let chargeOwner = "platform";
+        let chargeOwner = "retailer"; // delivery income always goes to the retailer
 
         if (vendor.deliveryChargePermission && vendor.retailerDeliverySlabs && vendor.retailerDeliverySlabs.length > 0) {
             slabsToUse = vendor.retailerDeliverySlabs;
-            chargeOwner = "retailer";
         }
 
         const { charge, slab, deliverable } = resolveDeliveryCharge(distanceKm, { ...globalSetting.toObject(), slabs: slabsToUse });
@@ -327,7 +326,7 @@ export const getDeliveryIncomeReport = async (req, res) => {
                 orders,
                 summary: {
                     ...summary,
-                    totalPlatformIncome: summary.totalDeliveryIncome + summary.totalCommissionIncome
+                    totalPlatformIncome: summary.totalCommissionIncome
                 },
                 pagination: {
                     total: totalCount,
@@ -347,8 +346,8 @@ export const getDeliveryIncomeReport = async (req, res) => {
 export const getRetailerDeliveryIncome = async (req, res) => {
     try {
         const retailerId = req.user.id;
-        const retailer = await User.findById(retailerId).select("deliveryChargePermission");
-        if (!retailer || !retailer.deliveryChargePermission) {
+        const retailer = await User.findById(retailerId);
+        if (!retailer) {
             return res.status(200).json({ success: true, data: { totalDeliveryIncome: 0, totalOrders: 0, orders: [] } });
         }
 

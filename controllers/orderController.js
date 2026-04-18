@@ -111,7 +111,7 @@ export const placeOrder = async (req, res) => {
         // 3a. Calculate delivery fee
         let deliveryFee = 0;
         let distanceKm = 0;
-        let deliveryChargeOwner = "platform"; // who gets the delivery income
+        let deliveryChargeOwner = "retailer"; // delivery income always goes to the retailer
 
         const retailerUser = await User.findById(identifiedRetailer).select("businessDetails.location deliveryChargePermission retailerDeliverySlabs");
         const vendorCoords = retailerUser?.businessDetails?.location?.coordinates;
@@ -131,7 +131,6 @@ export const placeOrder = async (req, res) => {
                 let slabsToUse = deliverySetting.slabs;
                 if (retailerUser.deliveryChargePermission && retailerUser.retailerDeliverySlabs?.length > 0) {
                     slabsToUse = retailerUser.retailerDeliverySlabs;
-                    deliveryChargeOwner = "retailer";
                 }
 
                 const result = resolveDeliveryCharge(distanceKm, { ...deliverySetting.toObject(), slabs: slabsToUse });
