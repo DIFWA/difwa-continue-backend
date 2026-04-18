@@ -388,7 +388,7 @@ export const verifyOtp = async (req, res) => {
             success: true,
             data: {
                 ...user.toObject(),
-                role: role
+                role: "retailer"
             },
             token,
         });
