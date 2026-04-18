@@ -125,7 +125,7 @@ export const updateRetailerSlabOptions = async (req, res) => {
 // GET /api/retailer/delivery-charges
 export const getRetailerDeliveryCharges = async (req, res) => {
     try {
-        const retailer = await User.findById(req.user.id).select("deliveryChargePermission retailerDeliverySlabs");
+        const retailer = await User.findById(req.user.id).select("deliveryChargePermission retailerDeliverySlabs retailerMaxDeliveryKm");
         if (!retailer) return res.status(404).json({ success: false, message: "Retailer not found" });
 
         const globalSetting = await getDeliveryChargeSetting();
@@ -136,7 +136,8 @@ export const getRetailerDeliveryCharges = async (req, res) => {
                 deliveryChargePermission: retailer.deliveryChargePermission,
                 retailerDeliverySlabs: retailer.retailerDeliverySlabs || [],
                 availableSlabOptions: globalSetting.retailerSlabOptions || [],
-                maxDeliveryKm: globalSetting.maxDeliveryKm
+                maxDeliveryKm: globalSetting.maxDeliveryKm,
+                retailerMaxDeliveryKm: retailer.retailerMaxDeliveryKm || null
             }
         });
     } catch (error) {
@@ -148,7 +149,7 @@ export const getRetailerDeliveryCharges = async (req, res) => {
 // PUT /api/retailer/delivery-charges
 export const updateRetailerDeliveryCharges = async (req, res) => {
     try {
-        const { slabs } = req.body;
+        const { slabs, retailerMaxDeliveryKm } = req.body;
         const retailer = await User.findById(req.user.id);
         if (!retailer) return res.status(404).json({ success: false, message: "Retailer not found" });
 
@@ -160,6 +161,9 @@ export const updateRetailerDeliveryCharges = async (req, res) => {
             return res.status(400).json({ success: false, message: "slabs must be an array" });
         }
 
+        const maxLimit = retailerMaxDeliveryKm || 30; // default to 30 if not provided
+        let highestMaxKm = 0;
+
         for (const slab of slabs) {
             if (slab.minKm >= slab.maxKm) {
                 return res.status(400).json({ success: false, message: "Invalid slab: minKm must be less than maxKm" });
@@ -167,13 +171,28 @@ export const updateRetailerDeliveryCharges = async (req, res) => {
             if (slab.charge < 0) {
                 return res.status(400).json({ success: false, message: "Charge cannot be negative" });
             }
+            if (slab.maxKm > highestMaxKm) {
+                highestMaxKm = slab.maxKm;
+            }
+        }
+
+        if (highestMaxKm > maxLimit) {
+            return res.status(400).json({ success: false, message: `The maximum distance in your slabs (${highestMaxKm} km) cannot exceed your Max Delivery Distance (${maxLimit} km).` });
         }
 
         retailer.retailerDeliverySlabs = slabs;
+        retailer.retailerMaxDeliveryKm = maxLimit;
         retailer.markModified("retailerDeliverySlabs");
         await retailer.save();
 
-        res.status(200).json({ success: true, message: "Delivery charges updated", data: retailer.retailerDeliverySlabs });
+        res.status(200).json({ 
+            success: true, 
+            message: "Delivery charges updated", 
+            data: {
+                slabs: retailer.retailerDeliverySlabs,
+                retailerMaxDeliveryKm: retailer.retailerMaxDeliveryKm
+            } 
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -191,7 +210,7 @@ export const calculateDeliveryFee = async (req, res) => {
             return res.status(400).json({ success: false, message: "vendorId is required" });
         }
 
-        const vendor = await User.findById(vendorId).select("businessDetails.location deliveryChargePermission retailerDeliverySlabs");
+        const vendor = await User.findById(vendorId).select("businessDetails.location deliveryChargePermission retailerDeliverySlabs retailerMaxDeliveryKm");
         if (!vendor) {
             return res.status(404).json({ success: false, message: "Vendor not found" });
         }
@@ -233,21 +252,23 @@ export const calculateDeliveryFee = async (req, res) => {
         const globalSetting = await getDeliveryChargeSetting();
         let slabsToUse = globalSetting.slabs;
         let chargeOwner = "platform";
+        let maxDeliveryKm = globalSetting.maxDeliveryKm;
 
         if (vendor.deliveryChargePermission && vendor.retailerDeliverySlabs && vendor.retailerDeliverySlabs.length > 0) {
             slabsToUse = vendor.retailerDeliverySlabs;
             chargeOwner = "retailer";
+            maxDeliveryKm = vendor.retailerMaxDeliveryKm || globalSetting.maxDeliveryKm;
         }
 
-        const { charge, slab, deliverable } = resolveDeliveryCharge(distanceKm, { ...globalSetting.toObject(), slabs: slabsToUse });
+        const { charge, slab, deliverable } = resolveDeliveryCharge(distanceKm, { ...globalSetting.toObject(), slabs: slabsToUse, maxDeliveryKm });
 
         if (!deliverable) {
             return res.status(200).json({
                 success: true,
                 deliverable: false,
                 distanceKm,
-                maxDeliveryKm: globalSetting.maxDeliveryKm,
-                message: `Sorry, delivery is not available beyond ${globalSetting.maxDeliveryKm} km. Your distance is ${distanceKm} km.`
+                maxDeliveryKm,
+                message: `Sorry, delivery is not available beyond ${maxDeliveryKm} km. Your distance is ${distanceKm} km.`
             });
         }
 

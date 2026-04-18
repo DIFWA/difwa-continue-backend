@@ -113,7 +113,7 @@ export const placeOrder = async (req, res) => {
         let distanceKm = 0;
         let deliveryChargeOwner = "platform";
 
-        const retailerUser = await User.findById(identifiedRetailer).select("businessDetails.location deliveryChargePermission retailerDeliverySlabs");
+        const retailerUser = await User.findById(identifiedRetailer).select("businessDetails.location deliveryChargePermission retailerDeliverySlabs retailerMaxDeliveryKm");
         const vendorCoords = retailerUser?.businessDetails?.location?.coordinates;
         const userCoords = deliveryAddress?.coordinates; // { lat, lng } sent from app
 
@@ -129,14 +129,17 @@ export const placeOrder = async (req, res) => {
 
                 // Use retailer's own slabs if they have permission and slabs are set
                 let slabsToUse = deliverySetting.slabs;
+                let maxDeliveryKm = deliverySetting.maxDeliveryKm;
+
                 if (retailerUser.deliveryChargePermission && retailerUser.retailerDeliverySlabs?.length > 0) {
                     slabsToUse = retailerUser.retailerDeliverySlabs;
                     deliveryChargeOwner = "retailer";
+                    maxDeliveryKm = retailerUser.retailerMaxDeliveryKm || deliverySetting.maxDeliveryKm;
                 }
 
-                const result = resolveDeliveryCharge(distanceKm, { ...deliverySetting.toObject(), slabs: slabsToUse });
+                const result = resolveDeliveryCharge(distanceKm, { ...deliverySetting.toObject(), slabs: slabsToUse, maxDeliveryKm });
                 if (!result.deliverable) {
-                    throw new Error(`Delivery not available. Distance ${distanceKm} km exceeds maximum ${deliverySetting.maxDeliveryKm} km.`);
+                    throw new Error(`Delivery not available. Distance ${distanceKm} km exceeds maximum ${maxDeliveryKm} km.`);
                 }
                 deliveryFee = result.charge;
             } catch (err) {

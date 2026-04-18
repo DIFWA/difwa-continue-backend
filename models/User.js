@@ -114,6 +114,11 @@ const userSchema = new mongoose.Schema({
             charge: { type: Number, required: true, min: 0 }
         }
     ],
+    // Retailer's custom maximum delivery distance limit
+    retailerMaxDeliveryKm: {
+        type: Number,
+        default: null
+    },
     resetPasswordToken: { type: String, default: null },
     resetPasswordExpires: { type: Date, default: null },
     otp: { type: String, default: null },
