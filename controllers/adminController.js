@@ -137,7 +137,7 @@ export const getRetailers = async (req, res) => {
     try {
         const { status, page = 1, limit = 10, search = "" } = req.query;
         const query = { role: "retailer" };
-        if (status) query.status = status;
+        if (status && status !== "all") query.status = status;
 
         if (search) {
             query.$or = [
