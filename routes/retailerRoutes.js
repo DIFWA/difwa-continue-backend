@@ -16,6 +16,7 @@ import { getDailyPrepList } from "../services/prepService.js";
 import { handleBulkOrders } from "../controllers/orderController.js";
 import { getBankAccounts, addBankAccount, deleteBankAccount, setDefaultBankAccount } from "../controllers/bankController.js";
 import { reverseGeocode } from "../services/mapService.js";
+import { requestPayout, getPayoutHistory } from "../controllers/payoutController.js";
 
 const router = express.Router();
 
@@ -44,6 +45,10 @@ router.get("/subscriptions", protect, retailerOnly, getRetailerSubscriptions);
 router.post("/subscriptions/manual", protect, retailerOnly, createManualSubscription);
 router.patch("/order-status", protect, retailerOnly, updateOrderItemStatus);
 router.post("/assign-rider", protect, retailerOnly, assignRiderToOrder);
+
+// Payouts
+router.post("/payout", protect, retailerOnly, requestPayout);
+router.get("/payout/history", protect, retailerOnly, getPayoutHistory);
 
 // Reviews
 router.get("/reviews", protect, retailerOnly, getRetailerReviews);

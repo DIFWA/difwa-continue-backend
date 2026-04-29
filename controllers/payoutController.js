@@ -1,24 +1,70 @@
 import Payout from "../models/Payout.js";
-import User from "../models/User.js"; // Assuming Retailer is a type of User or related
+import User from "../models/User.js"; 
 import AppUser from "../models/AppUser.js";
+import Order from "../models/Order.js"; // Added for balance calculation
 import { notifyAdmins, createNotification } from "../services/notificationService.js";
 import { emitPayoutUpdate } from "../services/socketService.js";
 
 export const requestPayout = async (req, res) => {
     try {
-        const { amount, bankDetails } = req.body;
+        const { amount, bankName, accountNumber, ifsc, bankDetails: nestedDetails } = req.body;
         const retailerId = req.user.id;
+
+        // 1. Calculate Available Balance (Logic from getRetailerRevenueStats)
+        const baseQuery = { 
+            "items.retailer": retailerId,
+            status: { $in: ["Delivered", "Completed"] } 
+        };
+        const lifetimeOrders = await Order.find(baseQuery);
+        
+        let gross = 0;
+        let commission = 0;
+        lifetimeOrders.forEach(order => {
+            let orderGross = 0;
+            order.items.forEach(item => {
+                if (item.retailer && item.retailer.toString() === retailerId.toString()) {
+                    orderGross += item.price * item.quantity;
+                }
+            });
+            if (orderGross > 0) {
+                const rate = order.commissionRate || 0;
+                commission += parseFloat(((orderGross * rate) / 100).toFixed(2));
+                gross += orderGross;
+            }
+        });
+        const lifetimeNet = gross - commission;
+
+        // Fetch all payout requests (Pending, Approved, Paid) to calculate remaining balance
+        const allPayouts = await Payout.find({ retailer: retailerId, status: { $in: ['Pending', 'Approved', 'Paid'] } });
+        const totalRequested = allPayouts.reduce((sum, p) => sum + p.amount, 0);
+
+        const availableBalance = lifetimeNet - totalRequested;
+
+        if (amount > availableBalance) {
+            return res.status(400).json({
+                success: false,
+                message: "Insufficient available balance for payout."
+            });
+        }
+
+        // 2. Map Bank Details (Supporting both flat and nested structure)
+        const finalBankDetails = nestedDetails || {
+            bankName,
+            accountNumber,
+            ifscCode: ifsc,
+            accountHolderName: req.user.fullName || req.user.name
+        };
 
         const payout = new Payout({
             retailer: retailerId,
             amount,
-            bankDetails,
+            bankDetails: finalBankDetails,
             status: 'Pending'
         });
 
         await payout.save();
 
-        // ─── NOTIFY ADMINS ──────────────────────────────
+        // 3. Notify Admins
         const retailer = await User.findById(retailerId).select("fullName businessDetails");
         const shopName = retailer?.businessDetails?.businessName || retailer?.fullName || "A retailer";
 
@@ -31,7 +77,7 @@ export const requestPayout = async (req, res) => {
 
         emitPayoutUpdate(payout._id.toString(), 'Pending', payout, retailerId);
 
-        res.status(201).json({ success: true, message: "Payout requested successfully", data: payout });
+        res.status(200).json({ success: true, message: "Payout requested successfully" });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
