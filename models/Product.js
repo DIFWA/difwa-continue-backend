@@ -50,7 +50,7 @@ const ProductSchema = new mongoose.Schema({
     // },
     retailer: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "User", // Assuming User model is used for Retailers too, or I should check Retailer model if any
+        ref: "User", // Assuming User model is used for Retailers too
         required: true
     },
     status: {
@@ -60,7 +60,7 @@ const ProductSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-ProductSchema.pre('save', function (next) {
+ProductSchema.pre('save', async function () {
     if (this.isModified('stock')) {
         if (this.stock <= 0) {
             this.stockStatus = "Out of Stock";
@@ -70,7 +70,6 @@ ProductSchema.pre('save', function (next) {
             this.stockStatus = "In Stock";
         }
     }
-    next();
 });
 
 export default mongoose.model("Product", ProductSchema);

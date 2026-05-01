@@ -41,7 +41,8 @@ export const createProduct = async (req, res) => {
         emitProductUpdate("created", product, req.user._id);
         res.status(201).json({ success: true, data: product });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        console.error("❌ createProduct Error Stack:", error.stack);
+        res.status(500).json({ success: false, message: error.message, stack: error.stack });
     }
 };
 
