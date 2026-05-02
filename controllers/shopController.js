@@ -840,7 +840,11 @@ export const settleCustomerDue = async (req, res) => {
 
 export const createManualSubscription = async (req, res) => {
     try {
-        const sub = await Subscription.create({ ...req.body, retailer: req.user._id, isManual: true });
+        const payload = { ...req.body, retailer: req.user._id, isManual: true };
+        if (typeof payload.deliveryAddress === 'string') {
+            payload.deliveryAddress = { address: payload.deliveryAddress };
+        }
+        const sub = await Subscription.create(payload);
         res.status(201).json({ success: true, data: sub });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

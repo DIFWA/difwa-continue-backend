@@ -203,9 +203,11 @@ export const addRider = async (req, res) => {
         if (existingUser) return res.status(400).json({ success: false, message: "A user with this phone number already exists" });
 
         // Create User account (No password/email required for OTP flow)
+        // Assigning a dummy email to prevent duplicate key errors because the email_1 index is not sparse in DB
         const user = new User({
             name,
             phone,
+            email: `rider_${Date.now()}_${Math.floor(Math.random() * 10000)}@difwa.com`,
             role: "rider",
             status: "approved"
         });
