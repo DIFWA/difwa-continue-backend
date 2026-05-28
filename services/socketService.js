@@ -340,6 +340,31 @@ export const emitProductUpdate = (action, product, retailerId) => {
         }).catch(err => console.error("Relay productUpdate emit failed:", err.message));
     }
 };
+// ─── Delivery OTP Emitter ────────────────────────────────────────────────────
+export const emitDeliveryOtp = (userId, orderId, otp, expiresAt) => {
+    const payload = { orderId, otp, expiresAt };
+
+    _log("Emitting DELIVERY_OTP to customer", { data: { userId, orderId } });
+
+    if (io) {
+        io.to(`user_${userId.toString()}`).emit("DELIVERY_OTP", payload);
+    }
+
+    const relayUrl = process.env.SOCKET_RELAY_URL;
+    if (relayUrl) {
+        fetch(`${relayUrl}/emit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                secret: process.env.SOCKET_SECRET || "shrimpbite_socket_relay_secret_2026",
+                event: "DELIVERY_OTP",
+                room: `user_${userId.toString()}`,
+                data: payload
+            })
+        }).catch(err => console.error("Relay DELIVERY_OTP emit failed:", err.message));
+    }
+};
+
 // ─── New Support Request Emitter ─────────────────────────────────────────────
 export const emitNewSupportRequest = (supportRequest, appUser) => {
     const payload = {

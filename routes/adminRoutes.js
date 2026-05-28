@@ -23,7 +23,8 @@ import {
     updateAdminUser,
     deleteAdminUser,
     getGlobalTransactions,
-    getGlobalSearch
+    getGlobalSearch,
+    getAllRiders
 } from "../controllers/adminController.js";
 import { getAllSupportRequests, updateSupportEmails, getSupportEmails } from "../controllers/adminSupportController.js";
 import {
@@ -97,5 +98,8 @@ router.get("/search", protect, adminOnly, getGlobalSearch)
 router.get("/support/requests", protect, adminOnly, getAllSupportRequests);
 router.get("/support/emails", protect, adminOnly, getSupportEmails);
 router.put("/support/emails", protect, adminOnly, updateSupportEmails);
+
+// Riders
+router.get("/riders", protect, adminOnly, getAllRiders);
 
 export default router;

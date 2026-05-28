@@ -10,7 +10,9 @@ import {
     respondToOrderAssignment,
     completeDelivery,
     deleteRider,
-    updateRider
+    updateRider,
+    requestDeliveryOtp,
+    verifyDeliveryOtp
 } from "../controllers/riderController.js";
 import { getOptimizedRouteForRider } from "../controllers/logisticsController.js";
 import { protect, riderOnly, retailerOnly } from "../middleware/authMiddleware.js";
@@ -24,6 +26,8 @@ router.patch("/status", protect, riderOnly, updateDeliveryStatus);
 router.patch("/order-response", protect, riderOnly, respondToOrderAssignment);
 router.patch("/location", protect, riderOnly, updateRiderLocation);
 router.patch("/complete", protect, riderOnly, completeDelivery);
+router.post("/request-otp", protect, riderOnly, requestDeliveryOtp);
+router.post("/verify-otp", protect, riderOnly, verifyDeliveryOtp);
 router.get("/optimized-route", protect, riderOnly, getOptimizedRouteForRider);
 
 // Retailer Side

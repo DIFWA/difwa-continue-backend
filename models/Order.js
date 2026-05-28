@@ -110,6 +110,14 @@ const orderSchema = new mongoose.Schema({
         role: { type: String, enum: ['retailer', 'rider', 'system', 'user'], default: 'system' },
         timestamp: { type: Date, default: Date.now }
     }],
+    deliveryOtp: {
+        type: String,
+        default: null
+    },
+    deliveryOtpExpiresAt: {
+        type: Date,
+        default: null
+    },
     isManual: {
         type: Boolean,
         default: false

@@ -2,7 +2,7 @@ import User from "../models/User.js";
 import Order from "../models/Order.js";
 import RiderModel from "../models/Rider.js";
 import bcrypt from "bcryptjs";
-import { emitOrderUpdate, emitRiderAssigned, emitOrderDelivered } from "../services/socketService.js";
+import { emitOrderUpdate, emitRiderAssigned, emitOrderDelivered, emitDeliveryOtp } from "../services/socketService.js";
 import { createNotification } from "../services/notificationService.js";
 
 export const getRiderOrders = async (req, res) => {
@@ -349,6 +349,137 @@ export const deleteRider = async (req, res) => {
         await RiderModel.findByIdAndDelete(req.params.id);
 
         res.status(200).json({ success: true, message: "Rider deleted successfully" });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// ─── DELIVERY OTP FLOW ────────────────────────────────────────────────────────
+
+export const requestDeliveryOtp = async (req, res) => {
+    try {
+        const { orderId } = req.body;
+        const riderId = req.user.id;
+
+        const order = await Order.findOne({ orderId, rider: riderId })
+            .populate("user", "fullName phoneNumber _id");
+
+        if (!order) {
+            return res.status(404).json({ success: false, message: "Order not found or not assigned to you" });
+        }
+
+        const validStatuses = ["Out for Delivery", "Rider Accepted", "Accepted", "Processing", "Shipped"];
+        if (!validStatuses.includes(order.status)) {
+            return res.status(400).json({ success: false, message: `Cannot request OTP for an order with status: ${order.status}` });
+        }
+
+        // Generate 4-digit OTP
+        const otp = Math.floor(1000 + Math.random() * 9000).toString();
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+        order.deliveryOtp = otp;
+        order.deliveryOtpExpiresAt = expiresAt;
+        await order.save();
+
+        // Push OTP to customer's active order screen via socket
+        const customerId = order.user?._id || order.user;
+        emitDeliveryOtp(customerId, orderId, otp, expiresAt);
+
+        // Emit orderUpdate to admin room — triggers admin page's existing listener
+        // which re-fetches orders, so deliveryOtp becomes visible in the order modal
+        const retailerId = order.items?.[0]?.retailer;
+        await emitOrderUpdate(orderId, order.status, { orderId, deliveryOtp: otp, deliveryOtpExpiresAt: expiresAt }, retailerId, customerId);
+
+        res.status(200).json({
+            success: true,
+            message: "OTP sent to customer successfully",
+            // Return otp for dev/debug — in prod you may want to omit this from rider response
+            otp
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const verifyDeliveryOtp = async (req, res) => {
+    try {
+        const { orderId, otp } = req.body;
+        const riderId = req.user.id;
+
+        if (!orderId || !otp) {
+            return res.status(400).json({ success: false, message: "orderId and otp are required" });
+        }
+
+        const order = await Order.findOne({ orderId, rider: riderId })
+            .populate("items.retailer")
+            .populate("user", "fullName phoneNumber _id");
+
+        if (!order) {
+            return res.status(404).json({ success: false, message: "Order not found or not assigned to you" });
+        }
+
+        if (!order.deliveryOtp) {
+            return res.status(400).json({ success: false, message: "No OTP has been requested for this order. Please request an OTP first." });
+        }
+
+        if (order.deliveryOtp !== otp.toString()) {
+            return res.status(400).json({ success: false, message: "Incorrect OTP. Please try again." });
+        }
+
+        if (new Date() > new Date(order.deliveryOtpExpiresAt)) {
+            return res.status(400).json({ success: false, message: "OTP has expired. Please request a new one." });
+        }
+
+        // OTP verified — mark order as Delivered
+        order.status = "Delivered";
+        order.deliveredAt = new Date();
+        order.paymentStatus = "Paid";
+        order.items.forEach(item => { item.status = "Delivered"; });
+        order.statusHistory = order.statusHistory || [];
+        order.statusHistory.push({
+            status: "Delivered",
+            changedBy: riderId,
+            role: "rider",
+            timestamp: new Date()
+        });
+
+        // Clear OTP after successful use
+        order.deliveryOtp = null;
+        order.deliveryOtpExpiresAt = null;
+
+        await order.save();
+
+        // Update rider status back to Available
+        const RiderModel = (await import("../models/Rider.js")).default;
+        await RiderModel.findOneAndUpdate({ user: riderId }, { status: "Available" });
+
+        const retailerId = order.items[0]?.retailer?._id || order.items[0]?.retailer;
+        const userId = order.user?._id || order.user;
+
+        // Emit order update
+        await emitOrderUpdate(orderId, "Delivered", { orderId, status: "Delivered", statusHistory: order.statusHistory }, retailerId, userId, riderId);
+        emitOrderDelivered(orderId, userId);
+
+        // Notify retailer
+        const customer = await (await import("../models/AppUser.js")).default.findById(userId);
+        const riderUser = await User.findById(riderId);
+        createNotification(retailerId.toString(), {
+            title: "Order Delivered! 🎉",
+            message: `Order #${orderId.slice(-6).toUpperCase()} delivered to ${customer?.fullName || "Customer"} by rider ${riderUser?.name || "Rider"}. OTP verified ✓`,
+            type: "Order",
+            referenceId: orderId
+        });
+
+        // Notify customer
+        createNotification(userId.toString(), {
+            title: "Order Delivered! 🎉",
+            message: `Your order #${orderId.slice(-6).toUpperCase()} has been delivered and verified successfully.`,
+            type: "Order",
+            referenceId: order._id.toString(),
+            onModel: "AppUser"
+        });
+
+        res.status(200).json({ success: true, message: "OTP verified. Order marked as Delivered.", data: order });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

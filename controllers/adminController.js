@@ -916,3 +916,54 @@ export const getGlobalSearch = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+export const getAllRiders = async (req, res) => {
+    try {
+        const Rider = (await import("../models/Rider.js")).default;
+
+        const riders = await Rider.find()
+            .populate("user", "name phone email status createdAt")
+            .populate("retailer", "name businessDetails.businessName businessDetails.location.city businessDetails.location.state")
+            .sort({ createdAt: -1 });
+
+        // Completed delivery counts per rider user ID
+        const riderUserIds = riders.map(r => r.user?._id).filter(Boolean);
+        const deliveryCounts = await Order.aggregate([
+            { $match: { rider: { $in: riderUserIds }, status: "Delivered" } },
+            { $group: { _id: "$rider", count: { $sum: 1 } } }
+        ]);
+        const countMap = {};
+        deliveryCounts.forEach(d => { countMap[d._id.toString()] = d.count; });
+
+        const data = riders.map(r => ({
+            _id: r._id,
+            user: r.user,
+            retailer: r.retailer,
+            vehicleDetails: r.vehicleDetails,
+            status: r.status,
+            currentLocation: r.currentLocation,
+            deliveriesCompleted: countMap[r.user?._id?.toString()] || 0,
+            createdAt: r.createdAt
+        }));
+
+        // Group by retailer for summary
+        const byRetailer = {};
+        data.forEach(rider => {
+            const key = rider.retailer?._id?.toString() || "unassigned";
+            if (!byRetailer[key]) {
+                byRetailer[key] = { retailer: rider.retailer, riders: [] };
+            }
+            byRetailer[key].riders.push(rider);
+        });
+
+        res.status(200).json({
+            success: true,
+            data,
+            totalRiders: riders.length,
+            byRetailer: Object.values(byRetailer)
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
